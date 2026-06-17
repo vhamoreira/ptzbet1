@@ -1075,7 +1075,7 @@ export default function App() {
   const [pinInput, setPinInput] = useState('');
   const [pinOpen, setPinOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [tab, setTab] = useState('jogos');
+  const [tab, setTab] = useState('proximos');
   const [results, setResults] = useState({});
   const [extraMatches, setExtraMatches] = useState([]);
   const [myPicks, setMyPicks] = useState({});
@@ -1214,13 +1214,6 @@ export default function App() {
     });
   }, [allMatches, results]);
 
-  const groupedByDate = useMemo(() => {
-    const filtered = filterGroup === 'Todos' ? allMatches : allMatches.filter((m) => m.group === filterGroup);
-    const map = {};
-    for (const m of filtered) (map[m.date] = map[m.date] || []).push(m);
-    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [allMatches, filterGroup]);
-
   const terminadosMatches = useMemo(() => {
     return allMatchesEver.filter((m) => results[m.id] && results[m.id].finished).slice().reverse();
   }, [allMatchesEver, results]);
@@ -1232,11 +1225,12 @@ export default function App() {
   }, [proximosDays]);
 
   const proximosGroupedByDate = useMemo(() => {
-    const filtered = allMatches.filter((m) => !(results[m.id] && results[m.id].finished) && m.date <= proximosLimitDate);
+    let filtered = allMatches.filter((m) => !(results[m.id] && results[m.id].finished) && m.date <= proximosLimitDate);
+    if (filterGroup !== 'Todos') filtered = filtered.filter((m) => m.group === filterGroup);
     const map = {};
     for (const m of filtered) (map[m.date] = map[m.date] || []).push(m);
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [allMatches, results, proximosLimitDate]);
+  }, [allMatches, results, proximosLimitDate, filterGroup]);
 
   useEffect(() => {
     if (stage === 'app') {
@@ -1441,10 +1435,9 @@ export default function App() {
 
           <div className="flex rounded-xl bg-slate-800 p-1 overflow-x-auto">
             {[
-              ['jogos', 'Jogos'],
-              ['proximos', 'Próximos'],
               ['terminados', 'Terminados'],
-              ['classificacao', 'Pontos'],
+              ['proximos', 'Próximos'],
+              ['classificacao', 'Classificação'],
             ].map(([val, label]) => (
               <button
                 key={val}
@@ -1471,7 +1464,7 @@ export default function App() {
           </div>
         )}
 
-        {tab === 'jogos' && (
+        {tab === 'proximos' && (
           <>
             {liveMatches.length > 0 && (
               <div className="flex flex-col gap-2">
@@ -1496,50 +1489,6 @@ export default function App() {
               </div>
             )}
 
-            <select
-              value={filterGroup}
-              onChange={(e) => setFilterGroup(e.target.value)}
-              className="rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1.5 px-2 text-sm self-start"
-            >
-              <option value="Todos">Todos os grupos</option>
-              {GROUPS.map((g) => (
-                <option key={g} value={g}>
-                  Grupo {g}
-                </option>
-              ))}
-            </select>
-
-            {groupedByDate.map(([date, matches]) => (
-              <div key={date} className="flex flex-col gap-2">
-                <p className="text-xs uppercase tracking-wide text-slate-500 mt-2">{formatDate(date)}</p>
-                {matches.map((m) => (
-                  <MatchCard
-                    key={m.id}
-                    match={m}
-                    pick={myPicks[m.id]}
-                    result={results[m.id]}
-                    isAdmin={isAdmin}
-                    myName={myName}
-                    onSavePick={savePick}
-                    onSaveResult={saveResult}
-                    otherPicks={picksByMatch[m.id] || []}
-                    knownPlayers={knownPlayers}
-                    onAdminSavePick={adminSavePick}
-                  />
-                ))}
-              </div>
-            ))}
-
-            {isAdmin && <AddMatchForm onAdd={addExtraMatch} />}
-
-            <p className="text-xs text-slate-500 text-center mt-2 mb-4">
-              Os jogos da fase eliminatória (oitavos em diante) ainda não têm equipas confirmadas — o admin vai adicionando à medida que os grupos terminam.
-            </p>
-          </>
-        )}
-
-        {tab === 'proximos' && (
-          <>
             <div className="rounded-xl bg-slate-800 border border-slate-700 px-3 py-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-slate-400">Mostrar próximos</span>
@@ -1556,6 +1505,19 @@ export default function App() {
                 className="w-full accent-amber-500"
               />
             </div>
+
+            <select
+              value={filterGroup}
+              onChange={(e) => setFilterGroup(e.target.value)}
+              className="rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1.5 px-2 text-sm self-start"
+            >
+              <option value="Todos">Todos os grupos</option>
+              {GROUPS.map((g) => (
+                <option key={g} value={g}>
+                  Grupo {g}
+                </option>
+              ))}
+            </select>
 
             {proximosGroupedByDate.length === 0 && (
               <p className="text-slate-500 text-sm text-center py-8">Sem jogos por decidir nesta janela de dias.</p>
@@ -1581,6 +1543,12 @@ export default function App() {
                 ))}
               </div>
             ))}
+
+            {isAdmin && <AddMatchForm onAdd={addExtraMatch} />}
+
+            <p className="text-xs text-slate-500 text-center mt-2 mb-4">
+              Os jogos da fase eliminatória (oitavos em diante) ainda não têm equipas confirmadas — o admin vai adicionando à medida que os grupos terminam.
+            </p>
           </>
         )}
 
