@@ -860,13 +860,28 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                       if (e.target.value === '__new__') {
                         setUseNewPlayerName(true);
                         setAdminPickName('');
+                        setAdminPickDraft({ outcome: '', scoreA: '', scoreB: '', scorer: '' });
                       } else {
                         setAdminPickName(e.target.value);
+                        const existing = (otherPicks || []).find((p) => p.name === e.target.value);
+                        if (existing && existing.pick) {
+                          const p = existing.pick;
+                          setAdminPickDraft({
+                            outcome: p.outcome || '',
+                            scoreA: p.scoreA ?? '',
+                            scoreB: p.scoreB ?? '',
+                            scorer: p.scorer || '',
+                          });
+                          setAdminScorerOther(!!p.scorer && !squadOptions.includes(p.scorer));
+                        } else {
+                          setAdminPickDraft({ outcome: '', scoreA: '', scoreB: '', scorer: '' });
+                          setAdminScorerOther(false);
+                        }
                       }
                     }}
                     className="flex-1 rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1.5 px-2 text-sm"
                   >
-                    <option value="">escolhe o jogador</option>
+                    <option value="">escolhe o jogador (mostra o palpite atual p/ corrigir)</option>
                     {(knownPlayers || []).map((n) => (
                       <option key={n} value={n}>{n}</option>
                     ))}
@@ -1066,6 +1081,7 @@ export default function App() {
   const [myPicks, setMyPicks] = useState({});
   const [allPicks, setAllPicks] = useState([]);
   const [filterGroup, setFilterGroup] = useState('Todos');
+  const [proximosDays, setProximosDays] = useState(3);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -1149,6 +1165,12 @@ export default function App() {
       .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   }, [extraMatches, todayStr]);
 
+  const allMatchesEver = useMemo(() => {
+    return [...BASE_MATCHES, ...KNOCKOUT_MATCHES, ...extraMatches]
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
+  }, [extraMatches]);
+
   const leaderboard = useMemo(() => {
     const rows = allPicks.map(({ name, matches }) => {
       let total = 0;
@@ -1198,6 +1220,23 @@ export default function App() {
     for (const m of filtered) (map[m.date] = map[m.date] || []).push(m);
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
   }, [allMatches, filterGroup]);
+
+  const terminadosMatches = useMemo(() => {
+    return allMatchesEver.filter((m) => results[m.id] && results[m.id].finished).slice().reverse();
+  }, [allMatchesEver, results]);
+
+  const proximosLimitDate = useMemo(() => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + proximosDays);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }, [proximosDays]);
+
+  const proximosGroupedByDate = useMemo(() => {
+    const filtered = allMatches.filter((m) => !(results[m.id] && results[m.id].finished) && m.date <= proximosLimitDate);
+    const map = {};
+    for (const m of filtered) (map[m.date] = map[m.date] || []).push(m);
+    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [allMatches, results, proximosLimitDate]);
 
   useEffect(() => {
     if (stage === 'app') {
@@ -1400,15 +1439,17 @@ export default function App() {
             </span>
           </div>
 
-          <div className="flex rounded-xl bg-slate-800 p-1">
+          <div className="flex rounded-xl bg-slate-800 p-1 overflow-x-auto">
             {[
               ['jogos', 'Jogos'],
-              ['classificacao', 'Classificação'],
+              ['proximos', 'Próximos'],
+              ['terminados', 'Terminados'],
+              ['classificacao', 'Pontos'],
             ].map(([val, label]) => (
               <button
                 key={val}
                 onClick={() => setTab(val)}
-                className={`flex-1 rounded-lg py-2 text-sm font-bold transition ${
+                className={`flex-1 rounded-lg py-2 text-xs sm:text-sm font-bold transition whitespace-nowrap px-1 ${
                   tab === val ? 'bg-amber-500 text-slate-900' : 'text-slate-400'
                 }`}
               >
@@ -1494,6 +1535,75 @@ export default function App() {
             <p className="text-xs text-slate-500 text-center mt-2 mb-4">
               Os jogos da fase eliminatória (oitavos em diante) ainda não têm equipas confirmadas — o admin vai adicionando à medida que os grupos terminam.
             </p>
+          </>
+        )}
+
+        {tab === 'proximos' && (
+          <>
+            <div className="rounded-xl bg-slate-800 border border-slate-700 px-3 py-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-slate-400">Mostrar próximos</span>
+                <span className="text-sm font-bold text-amber-300">
+                  {proximosDays} {proximosDays === 1 ? 'dia' : 'dias'}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="14"
+                value={proximosDays}
+                onChange={(e) => setProximosDays(Number(e.target.value))}
+                className="w-full accent-amber-500"
+              />
+            </div>
+
+            {proximosGroupedByDate.length === 0 && (
+              <p className="text-slate-500 text-sm text-center py-8">Sem jogos por decidir nesta janela de dias.</p>
+            )}
+
+            {proximosGroupedByDate.map(([date, matches]) => (
+              <div key={date} className="flex flex-col gap-2">
+                <p className="text-xs uppercase tracking-wide text-slate-500 mt-2">{formatDate(date)}</p>
+                {matches.map((m) => (
+                  <MatchCard
+                    key={m.id}
+                    match={m}
+                    pick={myPicks[m.id]}
+                    result={results[m.id]}
+                    isAdmin={isAdmin}
+                    myName={myName}
+                    onSavePick={savePick}
+                    onSaveResult={saveResult}
+                    otherPicks={picksByMatch[m.id] || []}
+                    knownPlayers={knownPlayers}
+                    onAdminSavePick={adminSavePick}
+                  />
+                ))}
+              </div>
+            ))}
+          </>
+        )}
+
+        {tab === 'terminados' && (
+          <>
+            {terminadosMatches.length === 0 && (
+              <p className="text-slate-500 text-sm text-center py-8">Ainda não há jogos terminados.</p>
+            )}
+            {terminadosMatches.map((m) => (
+              <MatchCard
+                key={m.id}
+                match={m}
+                pick={myPicks[m.id]}
+                result={results[m.id]}
+                isAdmin={isAdmin}
+                myName={myName}
+                onSavePick={savePick}
+                onSaveResult={saveResult}
+                otherPicks={picksByMatch[m.id] || []}
+                knownPlayers={knownPlayers}
+                onAdminSavePick={adminSavePick}
+              />
+            ))}
           </>
         )}
 
