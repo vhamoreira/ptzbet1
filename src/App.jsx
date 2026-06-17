@@ -411,6 +411,18 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
   );
 
   const [pickAdminOpen, setPickAdminOpen] = useState(false);
+  const [resultGoalOther, setResultGoalOther] = useState(false);
+  const [resultGoalOtherText, setResultGoalOtherText] = useState('');
+
+  function addGoal(name) {
+    if (!name || !name.trim()) return;
+    setDraftResult((d) => ({ ...d, scorers: [...(d.scorers || []), name.trim()] }));
+  }
+
+  function removeGoal(index) {
+    setDraftResult((d) => ({ ...d, scorers: (d.scorers || []).filter((_, i) => i !== index) }));
+  }
+
   const [adminPickName, setAdminPickName] = useState('');
   const [useNewPlayerName, setUseNewPlayerName] = useState(false);
   const [adminPickDraft, setAdminPickDraft] = useState({ outcome: '', scoreA: '', scoreB: '', scorer: '' });
@@ -440,14 +452,10 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
   }
 
   function saveResultNow(extra = {}) {
-    const scorersText = extra.scorersText !== undefined ? extra.scorersText : (draftResult.scorers || []).join(', ');
     const payload = {
       scoreA: extra.scoreA !== undefined ? extra.scoreA : draftResult.scoreA,
       scoreB: extra.scoreB !== undefined ? extra.scoreB : draftResult.scoreB,
-      scorers: scorersText
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      scorers: extra.scorers !== undefined ? extra.scorers : draftResult.scorers || [],
       live: extra.live !== undefined ? extra.live : draftResult.live,
       finished: extra.finished !== undefined ? extra.finished : draftResult.finished,
       teamAName: extra.teamAName !== undefined ? extra.teamAName : draftResult.teamAName || '',
@@ -721,13 +729,67 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                   onChange={(e) => setDraftResult((d) => ({ ...d, scoreB: e.target.value }))}
                   className="w-14 text-center rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1"
                 />
-                <input
-                  type="text"
-                  placeholder="marcadores (repete o nome se marcar 2x)"
-                  defaultValue={(draftResult.scorers || []).join(', ')}
-                  onBlur={(e) => setDraftResult((d) => ({ ...d, scorersText: e.target.value }))}
-                  className="flex-1 rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1 px-2 text-sm"
-                />
+              </div>
+
+              {(draftResult.scorers || []).length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {draftResult.scorers.map((s, i) => (
+                    <span key={`${s}-${i}`} className="inline-flex items-center gap-1 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs text-stone-200">
+                      {s}
+                      <button onClick={() => removeGoal(i)} className="text-slate-500 hover:text-rose-400">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                {resultGoalOther ? (
+                  <>
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="nome de quem marcou"
+                      value={resultGoalOtherText}
+                      onChange={(e) => setResultGoalOtherText(e.target.value)}
+                      className="flex-1 rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1.5 px-2 text-sm"
+                    />
+                    <button
+                      onClick={() => {
+                        addGoal(resultGoalOtherText);
+                        setResultGoalOtherText('');
+                      }}
+                      className="rounded-md bg-slate-700 text-stone-100 text-xs font-bold px-2 py-1.5 shrink-0"
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <button onClick={() => setResultGoalOther(false)} className="text-xs text-slate-400 underline shrink-0">
+                      lista
+                    </button>
+                  </>
+                ) : (
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value === '__other__') setResultGoalOther(true);
+                      else if (e.target.value) addGoal(e.target.value);
+                    }}
+                    className="flex-1 rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1.5 px-2 text-sm"
+                  >
+                    <option value="">+ adicionar golo de...</option>
+                    <optgroup label={displayTeamA}>
+                      {(SQUADS[displayTeamA] || []).map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label={displayTeamB}>
+                      {(SQUADS[displayTeamB] || []).map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </optgroup>
+                    <option value="__other__">Outro (escrever nome)</option>
+                  </select>
+                )}
               </div>
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-3">
@@ -753,7 +815,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                     saveResultNow({
                       scoreA: draftResult.scoreA,
                       scoreB: draftResult.scoreB,
-                      scorersText: draftResult.scorersText,
+                      scorers: draftResult.scorers || [],
                       live: draftResult.live,
                       finished: draftResult.finished,
                       teamAName: draftResult.teamAName,
