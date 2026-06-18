@@ -1177,7 +1177,7 @@ export default function App() {
       let exactCount = 0;
       let outcomeCount = 0;
       let scorerCount = 0;
-      for (const m of allMatches) {
+      for (const m of allMatchesEver) {
         const pts = pointsFor(matches[m.id], results[m.id]);
         total += pts.total;
         if (pts.exact) exactCount++;
@@ -1188,7 +1188,7 @@ export default function App() {
     });
     rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     return rows;
-  }, [allPicks, allMatches, results]);
+  }, [allPicks, allMatchesEver, results]);
 
   const picksByMatch = useMemo(() => {
     const map = {};
@@ -1359,7 +1359,7 @@ export default function App() {
           <div className="flex items-center gap-2 justify-center mb-2">
             <Trophy className="text-amber-400" size={28} />
             <h1 style={displayFont} className="text-2xl text-stone-100">
-              Palpites Mundial 2026
+              PTZ Bet
             </h1>
           </div>
           <p className="text-center text-slate-400 text-sm">Como te chamas? É só para sabermos de quem são os palpites.</p>
@@ -1388,7 +1388,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <Trophy className="text-amber-400" size={22} />
               <h1 style={displayFont} className="text-lg text-stone-100">
-                Mundial 2026
+                PTZ Bet
               </h1>
             </div>
             <div className="flex items-center gap-2">
