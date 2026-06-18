@@ -1701,7 +1701,8 @@ export default function App() {
                       <p className="text-xs text-slate-400">
                         {highlight
                           ? <><span className="text-amber-300 font-semibold">{highlight}</span> · {row.total} pts total</>
-                          : <>{row.exactCount} exatos · {row.outcomeCount} venc. · {row.scorerPoints}pts marc. · {row.plenoCount} plenos</>}
+                          : <>{row.exactCount} exatos · {row.outcomeCount} venc. · {row.scorerPoints}pts marc. · {row.plenoCount} plenos</>
+                        }
                         }
                       </p>
                     </div>
