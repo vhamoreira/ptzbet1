@@ -367,12 +367,18 @@ function PointPill({ label, earned, value }) {
 function BetLine({ label, sublabel, status, points, children }) {
   const badgeClass =
     status === 'correct'
-      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
       : status === 'wrong'
-      ? 'bg-slate-800 text-slate-500 border-slate-700'
+      ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
       : 'bg-slate-800 text-slate-300 border-slate-700';
+  const cardClass =
+    status === 'correct'
+      ? 'bg-emerald-500/5 border-emerald-500/25'
+      : status === 'wrong'
+      ? 'bg-rose-500/5 border-rose-500/20'
+      : 'bg-slate-900 border-slate-700';
   return (
-    <div className="rounded-xl bg-slate-900 border border-slate-700 px-3 py-2.5 mb-2">
+    <div className={`rounded-xl border px-3 py-2.5 mb-2 ${cardClass}`}>
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="min-w-0">
           <p className="text-sm font-bold text-stone-100 truncate">{label}</p>
@@ -525,6 +531,39 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
         )}
 
         <BetLine
+          label="Resultado exato"
+          sublabel="O placar final certinho"
+          status={finished ? (pts.exact > 0 ? 'correct' : 'wrong') : 'pending'}
+          points={finished ? `+${pts.exact}` : '+5 pts'}
+        >
+          {pickEditable ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                value={draftPick.scoreA}
+                onChange={(e) => updatePick({ scoreA: e.target.value })}
+                onBlur={() => commitPick({})}
+                className="w-12 text-center rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1"
+              />
+              <span className="text-slate-500">-</span>
+              <input
+                type="number"
+                min="0"
+                value={draftPick.scoreB}
+                onChange={(e) => updatePick({ scoreB: e.target.value })}
+                onBlur={() => commitPick({})}
+                className="w-12 text-center rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-300">
+              {pick && pick.scoreA !== '' && pick.scoreB !== '' ? `${pick.scoreA} - ${pick.scoreB}` : 'não escolheste'}
+            </p>
+          )}
+        </BetLine>
+
+        <BetLine
           label="Resultado (V/E/D)"
           sublabel="Vitória, empate ou derrota"
           status={finished ? (pts.outcome > 0 ? 'correct' : 'wrong') : 'pending'}
@@ -559,39 +598,6 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                   ? displayTeamB
                   : 'Empate'
                 : 'não escolheste'}
-            </p>
-          )}
-        </BetLine>
-
-        <BetLine
-          label="Resultado exato"
-          sublabel="O placar final certinho"
-          status={finished ? (pts.exact > 0 ? 'correct' : 'wrong') : 'pending'}
-          points={finished ? `+${pts.exact}` : '+5 pts'}
-        >
-          {pickEditable ? (
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="0"
-                value={draftPick.scoreA}
-                onChange={(e) => updatePick({ scoreA: e.target.value })}
-                onBlur={() => commitPick({})}
-                className="w-12 text-center rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1"
-              />
-              <span className="text-slate-500">-</span>
-              <input
-                type="number"
-                min="0"
-                value={draftPick.scoreB}
-                onChange={(e) => updatePick({ scoreB: e.target.value })}
-                onBlur={() => commitPick({})}
-                className="w-12 text-center rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1"
-              />
-            </div>
-          ) : (
-            <p className="text-sm text-slate-300">
-              {pick && pick.scoreA !== '' && pick.scoreB !== '' ? `${pick.scoreA} - ${pick.scoreB}` : 'não escolheste'}
             </p>
           )}
         </BetLine>
