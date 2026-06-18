@@ -501,8 +501,13 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
           </span>
         </div>
         {isLive ? (
-          <span className="flex items-center gap-1 text-xs font-bold text-rose-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" /> AO VIVO
+          <span className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+            {result?.halftime
+              ? 'INT.'
+              : result?.minute
+              ? `${result.minute}${result.injuryTime ? `+${result.injuryTime}` : ''}'`
+              : 'AO VIVO'}
           </span>
         ) : (
           finished && <span className="text-xs font-bold text-amber-300">+{pts.total} pts</span>
