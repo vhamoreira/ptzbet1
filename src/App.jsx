@@ -1703,7 +1703,6 @@ export default function App() {
                           ? <><span className="text-amber-300 font-semibold">{highlight}</span> · {row.total} pts total</>
                           : <>{row.exactCount} exatos · {row.outcomeCount} venc. · {row.scorerPoints}pts marc. · {row.plenoCount} plenos</>
                         }
-                        }
                       </p>
                     </div>
                     <span style={displayFont} className={`px-3 py-1 rounded-lg border tabular-nums font-bold ${scoreClass}`}>
