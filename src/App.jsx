@@ -1591,7 +1591,7 @@ export default function App() {
                 : isSecond
                 ? 'bg-slate-700/60 border-slate-500/60'
                 : isMe
-                ? 'bg-amber-500/10 border-amber-500/40'
+                ? 'bg-sky-500/10 border-sky-500/40'
                 : 'bg-slate-800 border-slate-700';
 
               const rankEl = isFirst
