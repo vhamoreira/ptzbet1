@@ -1611,9 +1611,16 @@ export default function App() {
         {tab === 'classificacao' && (
           <div className="flex flex-col gap-2">
             {/* Filtros de ordenação */}
+            <button
+              onClick={() => setLbSort('total')}
+              className={`w-full rounded-lg py-2 px-2 text-sm font-bold transition ${
+                lbSort === 'total' ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              🏅 Geral
+            </button>
             <div className="grid grid-cols-2 gap-1.5">
               {[
-                ['total',    '🏅 Pontos'],
                 ['exact',    '🎯 Exatos'],
                 ['outcome',  '✅ Vencedores'],
                 ['scorer',   '⚽ Marcadores'],
