@@ -449,6 +449,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
 
   const finished = !!(result && result.finished);
   const pts = finished ? pointsFor(pick, result) : null;
+  const allCorrect = finished && pts && pts.exact > 0 && pts.outcome > 0 && pts.scorer > 0;
 
   function updatePick(partial) {
     const next = { ...draftPick, ...partial };
@@ -533,8 +534,6 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
               : `${isLive ? 'Jogo a decorrer' : 'O jogo já começou'} — palpites bloqueados.`}
           </p>
         )}
-
-  const allCorrect = finished && pts && pts.exact > 0 && pts.outcome > 0 && pts.scorer > 0;
 
         <BetLine
           label="Resultado exato"
