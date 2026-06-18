@@ -1653,6 +1653,7 @@ export default function App() {
               .map((row, i) => {
                 const isFirst = i === 0;
                 const isSecond = i === 1;
+                const isThird = i === 2;
                 const isPodium = lbSort === 'total' && (isFirst || isSecond);
                 const isMe = row.name === myName;
 
@@ -1664,11 +1665,14 @@ export default function App() {
                   ? 'bg-sky-500/10 border-sky-500/40'
                   : 'bg-slate-800 border-slate-700';
 
-                const rankEl = isPodium && isFirst
-                  ? <span className="text-xl">🏆</span>
-                  : isPodium && isSecond
-                  ? <span className="text-xl">🥈</span>
-                  : <span className="w-6 text-center font-black text-slate-500">{i + 1}</span>;
+                const rankEl = lbSort === 'total'
+                  ? isFirst  ? <span className="text-xl">🏆</span>
+                  : isSecond ? <span className="text-xl">🥈</span>
+                  :            <span className="w-6 text-center font-black text-slate-500">{i + 1}</span>
+                  : isFirst  ? <span className="text-xl">🥇</span>
+                  : isSecond ? <span className="text-xl">🥈</span>
+                  : isThird  ? <span className="text-xl">🥉</span>
+                  :            <span className="w-6 text-center font-black text-slate-500">{i + 1}</span>;
 
                 const scoreClass = isPodium && isFirst
                   ? 'text-amber-300 border-amber-500/50 bg-amber-500/10'
