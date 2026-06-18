@@ -366,13 +366,17 @@ function PointPill({ label, earned, value }) {
 // de aposta (ex: "Achraf Hakimi: 2+ Desarmes"), com o estado pendente/certo/errado.
 function BetLine({ label, sublabel, status, points, children }) {
   const badgeClass =
-    status === 'correct'
+    status === 'gold'
+      ? 'bg-amber-500/30 text-amber-300 border-amber-400/60'
+      : status === 'correct'
       ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
       : status === 'wrong'
       ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
       : 'bg-slate-800 text-slate-300 border-slate-700';
   const cardClass =
-    status === 'correct'
+    status === 'gold'
+      ? 'bg-amber-500/10 border-amber-400/50'
+      : status === 'correct'
       ? 'bg-emerald-500/5 border-emerald-500/25'
       : status === 'wrong'
       ? 'bg-rose-500/5 border-rose-500/20'
@@ -385,7 +389,7 @@ function BetLine({ label, sublabel, status, points, children }) {
           {sublabel && <p className="text-xs text-slate-500 truncate">{sublabel}</p>}
         </div>
         <span className={`shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-bold ${badgeClass}`}>
-          {status === 'correct' && <Check size={12} />}
+          {(status === 'correct' || status === 'gold') && <Check size={12} />}
           {status === 'wrong' && <X size={12} />}
           {points}
         </span>
@@ -530,10 +534,12 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
           </p>
         )}
 
+  const allCorrect = finished && pts && pts.exact > 0 && pts.outcome > 0 && pts.scorer > 0;
+
         <BetLine
           label="Resultado exato"
           sublabel="O placar final certinho"
-          status={finished ? (pts.exact > 0 ? 'correct' : 'wrong') : 'pending'}
+          status={finished ? (allCorrect ? 'gold' : pts.exact > 0 ? 'correct' : 'wrong') : 'pending'}
           points={finished ? `+${pts.exact}` : '+5 pts'}
         >
           {pickEditable ? (
@@ -566,7 +572,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
         <BetLine
           label="Resultado (V/E/D)"
           sublabel="Vitória, empate ou derrota"
-          status={finished ? (pts.outcome > 0 ? 'correct' : 'wrong') : 'pending'}
+          status={finished ? (allCorrect ? 'gold' : pts.outcome > 0 ? 'correct' : 'wrong') : 'pending'}
           points={finished ? `+${pts.outcome}` : '+3 pts'}
         >
           {pickEditable ? (
@@ -605,7 +611,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
         <BetLine
           label="Marcador"
           sublabel="+1 ponto por cada golo dele"
-          status={finished ? (pts.scorer > 0 ? 'correct' : 'wrong') : 'pending'}
+          status={finished ? (allCorrect ? 'gold' : pts.scorer > 0 ? 'correct' : 'wrong') : 'pending'}
           points={finished ? `+${pts.scorer}` : '+1/golo'}
         >
           {pickEditable ? (
