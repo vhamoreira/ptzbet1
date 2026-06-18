@@ -1112,6 +1112,7 @@ export default function App() {
   const [allPicks, setAllPicks] = useState([]);
   const [filterGroup, setFilterGroup] = useState('Todos');
   const [proximosDays, setProximosDays] = useState(3);
+  const [lbSort, setLbSort] = useState('total');
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -1207,14 +1208,17 @@ export default function App() {
       let exactCount = 0;
       let outcomeCount = 0;
       let scorerCount = 0;
+      let scorerPoints = 0;
+      let plenoCount = 0;
       for (const m of allMatchesEver) {
         const pts = pointsFor(matches[m.id], results[m.id]);
         total += pts.total;
         if (pts.exact) exactCount++;
         if (pts.outcome) outcomeCount++;
-        if (pts.scorer) scorerCount++;
+        if (pts.scorer) { scorerCount++; scorerPoints += pts.scorer; }
+        if (pts.exact && pts.outcome && pts.scorer) plenoCount++;
       }
-      return { name, total, exactCount, outcomeCount, scorerCount };
+      return { name, total, exactCount, outcomeCount, scorerCount, scorerPoints, plenoCount };
     });
     rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     return rows;
@@ -1607,54 +1611,102 @@ export default function App() {
 
         {tab === 'classificacao' && (
           <div className="flex flex-col gap-2">
+            {/* Filtros de ordenação */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                ['total',    '🏅 Pontos'],
+                ['exact',    '🎯 Exatos'],
+                ['outcome',  '✅ Vencedores'],
+                ['scorer',   '⚽ Marcadores'],
+                ['pleno',    '🌟 Plenos'],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setLbSort(key)}
+                  className={`rounded-lg py-2 px-2 text-xs font-bold transition ${
+                    lbSort === key ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             {leaderboard.length === 0 && (
               <p className="text-slate-500 text-sm text-center py-8">Ainda ninguém fez palpites.</p>
             )}
-            {leaderboard.map((row, i) => {
-              const isFirst = i === 0;
-              const isSecond = i === 1;
-              const isPodium = isFirst || isSecond;
-              const isMe = row.name === myName;
 
-              const cardClass = isFirst
-                ? 'bg-amber-500/15 border-amber-400/60'
-                : isSecond
-                ? 'bg-slate-700/60 border-slate-500/60'
-                : isMe
-                ? 'bg-sky-500/10 border-sky-500/40'
-                : 'bg-slate-800 border-slate-700';
+            {[...leaderboard]
+              .sort((a, b) => {
+                if (lbSort === 'exact')   return b.exactCount - a.exactCount   || b.total - a.total || a.name.localeCompare(b.name);
+                if (lbSort === 'outcome') return b.outcomeCount - a.outcomeCount || b.total - a.total || a.name.localeCompare(b.name);
+                if (lbSort === 'scorer')  return b.scorerPoints - a.scorerPoints || b.scorerCount - a.scorerCount || a.name.localeCompare(b.name);
+                if (lbSort === 'pleno')   return b.plenoCount - a.plenoCount   || b.total - a.total || a.name.localeCompare(b.name);
+                return b.total - a.total || a.name.localeCompare(b.name);
+              })
+              .map((row, i) => {
+                const isFirst = i === 0;
+                const isSecond = i === 1;
+                const isPodium = lbSort === 'total' && (isFirst || isSecond);
+                const isMe = row.name === myName;
 
-              const rankEl = isFirst
-                ? <span className="text-xl">🏆</span>
-                : isSecond
-                ? <span className="text-xl">🥈</span>
-                : <span className="w-6 text-center font-black text-slate-500">{i + 1}</span>;
+                const cardClass = isPodium && isFirst
+                  ? 'bg-amber-500/15 border-amber-400/60'
+                  : isPodium && isSecond
+                  ? 'bg-slate-700/60 border-slate-500/60'
+                  : isMe
+                  ? 'bg-sky-500/10 border-sky-500/40'
+                  : 'bg-slate-800 border-slate-700';
 
-              const scoreClass = isFirst
-                ? 'text-amber-300 border-amber-500/50 bg-amber-500/10'
-                : isSecond
-                ? 'text-slate-200 border-slate-500 bg-slate-800'
-                : 'text-amber-300 border-slate-700 bg-slate-900';
+                const rankEl = isPodium && isFirst
+                  ? <span className="text-xl">🏆</span>
+                  : isPodium && isSecond
+                  ? <span className="text-xl">🥈</span>
+                  : <span className="w-6 text-center font-black text-slate-500">{i + 1}</span>;
 
-              return (
-                <div key={row.name} className={`flex items-center gap-3 rounded-xl px-3 py-3 border ${cardClass}`}>
-                  <div className="w-6 flex items-center justify-center shrink-0">{rankEl}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className={`font-bold truncate ${isPodium ? 'text-stone-100' : 'text-stone-100'}`}>{row.name}</p>
-                      {isPodium && <span className="text-xs text-slate-400 shrink-0">🍽️ jantar pago</span>}
+                const scoreClass = isPodium && isFirst
+                  ? 'text-amber-300 border-amber-500/50 bg-amber-500/10'
+                  : isPodium && isSecond
+                  ? 'text-slate-200 border-slate-500 bg-slate-800'
+                  : 'text-amber-300 border-slate-700 bg-slate-900';
+
+                const highlight =
+                  lbSort === 'exact'   ? `${row.exactCount} exatos`
+                  : lbSort === 'outcome' ? `${row.outcomeCount} vencedores`
+                  : lbSort === 'scorer'  ? `${row.scorerPoints} pts marcador`
+                  : lbSort === 'pleno'   ? `${row.plenoCount} plenos 🌟`
+                  : null;
+
+                const statValue =
+                  lbSort === 'exact'   ? row.exactCount
+                  : lbSort === 'outcome' ? row.outcomeCount
+                  : lbSort === 'scorer'  ? row.scorerPoints
+                  : lbSort === 'pleno'   ? row.plenoCount
+                  : row.total;
+
+                return (
+                  <div key={row.name} className={`flex items-center gap-3 rounded-xl px-3 py-3 border ${cardClass}`}>
+                    <div className="w-6 flex items-center justify-center shrink-0">{rankEl}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-bold truncate text-stone-100">{row.name}</p>
+                        {isPodium && <span className="text-xs text-slate-400 shrink-0">🍽️</span>}
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        {highlight
+                          ? <><span className="text-amber-300 font-semibold">{highlight}</span> · {row.total} pts total</>
+                          : <>{row.exactCount} exatos · {row.outcomeCount} vencedores · {row.plenoCount} plenos</>
+                        }
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-400">
-                      {row.exactCount} exatos · {row.outcomeCount} vencedores · {row.scorerCount} marcadores
-                    </p>
+                    <span style={displayFont} className={`px-3 py-1 rounded-lg border tabular-nums font-bold ${scoreClass}`}>
+                      {statValue}
+                    </span>
                   </div>
-                  <span style={displayFont} className={`px-3 py-1 rounded-lg border tabular-nums font-bold ${scoreClass}`}>
-                    {row.total}
-                  </span>
-                </div>
-              );
-            })}
-            <p className="text-xs text-slate-600 text-center mt-1">🍽️ Os dois primeiros lugares ganham jantar pago</p>
+                );
+              })
+            }
+            <p className="text-xs text-slate-600 text-center mt-1">🍽️ Os dois primeiros lugares (por pontos) ganham jantar pago</p>
           </div>
         )}
       </div>
