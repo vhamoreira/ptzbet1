@@ -1335,7 +1335,7 @@ export default function App() {
 
   const proximosGroupedByDate = useMemo(() => {
     let filtered = allMatches.filter((m) => !(results[m.id] && results[m.id].finished) && m.date <= proximosLimitDate);
-    if (filterGroup !== 'Todos') filtered = filtered.filter((m) => m.group === filterGroup);
+    if (filterGroup !== 'Todos') filtered = filtered.filter((m) => m.group === filterGroup || m.group === null);
     const map = {};
     for (const m of filtered) (map[m.date] = map[m.date] || []).push(m);
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
