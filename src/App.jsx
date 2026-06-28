@@ -1349,6 +1349,118 @@ export default function App() {
     }
   }, [stage, myName, loadShared, loadMyPicks, loadAllPicks]);
 
+  // Ao abrir a app, vai buscar marcadores em falta à API-Football para todos
+  // os jogos terminados que ainda não têm marcadores guardados.
+  useEffect(() => {
+    if (stage !== 'app') return;
+    (async () => {
+      const API_KEY = 'e8134025bc279c122c4863d841fc2edb';
+      const API_BASE = 'https://v3.football.api-sports.io';
+
+      const stop = new Set(['do','da','de','e','and','of','the']);
+      const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+      const words = s => norm(s).split(/\s+/).filter(w => w && !stop.has(w));
+      const teamsMatch = (a, b) => {
+        if (norm(a) === norm(b)) return true;
+        const wa = words(a), wb = words(b);
+        const [sh, lo] = wa.length <= wb.length ? [wa,wb] : [wb,wa];
+        return sh.every(w => lo.some(w2 => w2===w || w2.includes(w) || w.includes(w2)));
+      };
+      const TEAM_MAP = {
+        'México':'Mexico','África do Sul':'South Africa','Coreia do Sul':'South Korea',
+        'Chéquia':'Czech Republic','Canadá':'Canada','Bósnia e Herzegovina':'Bosnia',
+        'Catar':'Qatar','Suíça':'Switzerland','Brasil':'Brazil','Marrocos':'Morocco',
+        'Escócia':'Scotland','Estados Unidos':'USA','Alemanha':'Germany',
+        'Curaçao':'Curacao','Costa do Marfim':'Ivory Coast','Equador':'Ecuador',
+        'Holanda':'Netherlands','Suécia':'Sweden','Tunísia':'Tunisia',
+        'Bélgica':'Belgium','Egito':'Egypt','Irão':'Iran','Nova Zelândia':'New Zealand',
+        'Espanha':'Spain','Cabo Verde':'Cape Verde','Arábia Saudita':'Saudi Arabia',
+        'Uruguai':'Uruguay','França':'France','Noruega':'Norway',
+        'Argentina':'Argentina','Argélia':'Algeria','Áustria':'Austria',
+        'Jordânia':'Jordan','Portugal':'Portugal','Colômbia':'Colombia',
+        'Inglaterra':'England','Croácia':'Croatia','Gana':'Ghana',
+        'Panamá':'Panama','Japão':'Japan','Iraque':'Iraq',
+        'Senegal':'Senegal','Haiti':'Haiti','Usbequistão':'Uzbekistan',
+        'RD Congo':'DR Congo','Austrália':'Australia','Turquia':'Turkey','Paraguai':'Paraguay',
+      };
+
+      // Lê resultados actuais
+      let current = {};
+      try {
+        const r = await storage.get('results', true);
+        current = r && r.value ? JSON.parse(r.value) : {};
+      } catch (e) { return; }
+
+      // Encontra jogos terminados sem marcadores (mas com golos)
+      const allM = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
+      const needScorers = allM.filter(m => {
+        const r = current[m.id];
+        if (!r || !r.finished) return false;
+        const goals = (Number(r.scoreA)||0) + (Number(r.scoreB)||0);
+        return goals > 0 && (!r.scorers || r.scorers.length === 0);
+      });
+
+      if (needScorers.length === 0) return;
+
+      // Agrupa por data
+      const byDate = {};
+      for (const m of needScorers) {
+        if (!byDate[m.date]) byDate[m.date] = [];
+        byDate[m.date].push(m);
+      }
+
+      let updated = false;
+
+      for (const date of Object.keys(byDate).sort()) {
+        try {
+          const res = await fetch(`${API_BASE}/fixtures?date=${date}`, {
+            headers: { 'x-apisports-key': API_KEY }
+          });
+          const data = await res.json();
+          if (data.errors && Object.keys(data.errors).length > 0) continue;
+          const fixtures = (data.response || []).filter(f => f.league?.id === 1);
+
+          for (const match of byDate[date]) {
+            const a = TEAM_MAP[match.teamA] || match.teamA;
+            const b = TEAM_MAP[match.teamB] || match.teamB;
+            const found = fixtures.find(f => {
+              const h = f.teams?.home?.name || '';
+              const aw = f.teams?.away?.name || '';
+              return (teamsMatch(a,h) && teamsMatch(b,aw)) || (teamsMatch(b,h) && teamsMatch(a,aw));
+            });
+            if (!found) continue;
+
+            await new Promise(r => setTimeout(r, 300));
+            const res2 = await fetch(`${API_BASE}/fixtures?id=${found.fixture?.id}`, {
+              headers: { 'x-apisports-key': API_KEY }
+            });
+            const data2 = await res2.json();
+            const full = (data2.response || [])[0];
+            if (!full) continue;
+
+            const scorers = (full.events || [])
+              .filter(ev => ev.type === 'Goal' && ev.detail !== 'Missed Penalty')
+              .map(ev => ev.player?.name || '')
+              .filter(Boolean);
+
+            if (scorers.length > 0) {
+              current = { ...current, [match.id]: { ...current[match.id], scorers } };
+              updated = true;
+            }
+          }
+          await new Promise(r => setTimeout(r, 200));
+        } catch (e) { /* segue para a próxima data */ }
+      }
+
+      if (updated) {
+        try {
+          await storage.set('results', JSON.stringify(current), true);
+          setResults(current);
+        } catch (e) {}
+      }
+    })();
+  }, [stage]);
+
   useEffect(() => {
     if (stage !== 'app') return;
     const id = setInterval(() => {
