@@ -1391,13 +1391,17 @@ export default function App() {
         current = r && r.value ? JSON.parse(r.value) : {};
       } catch (e) { return; }
 
-      // Encontra jogos terminados sem marcadores (mas com golos)
+      // Encontra jogos terminados sem marcadores (mas com golos),
+      // OU jogos a partir de 27 de junho (força atualização com nomes exactos da API)
+      const FORCE_FROM = '2026-06-27';
       const allM = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
       const needScorers = allM.filter(m => {
         const r = current[m.id];
         if (!r || !r.finished) return false;
         const goals = (Number(r.scoreA)||0) + (Number(r.scoreB)||0);
-        return goals > 0 && (!r.scorers || r.scorers.length === 0);
+        if (goals === 0) return false;
+        if (m.date >= FORCE_FROM) return true;
+        return !r.scorers || r.scorers.length === 0;
       });
 
       if (needScorers.length === 0) return;
