@@ -305,27 +305,25 @@ function outcomeOf(a, b) {
 }
 
 function pointsFor(pick, result) {
-  if (!pick || !result || !result.finished) return { scorer: 0, outcome: 0, exact: 0, total: 0 };
+  if (!pick || !result || !result.finished) return { scorer: 0, outcome: 0, exact: 0, qualify: 0, total: 0 };
   let scorer = 0;
   let outcome = 0;
   let exact = 0;
+  let qualify = 0;
   const actual = outcomeOf(result.scoreA, result.scoreB);
   if (pick.outcome === actual) outcome = 3;
   if (
-    pick.scoreA !== '' &&
-    pick.scoreA !== undefined &&
-    pick.scoreB !== '' &&
-    pick.scoreB !== undefined &&
+    pick.scoreA !== '' && pick.scoreA !== undefined &&
+    pick.scoreB !== '' && pick.scoreB !== undefined &&
     Number(pick.scoreA) === Number(result.scoreA) &&
     Number(pick.scoreB) === Number(result.scoreB)
-  ) {
-    exact = 5;
-  }
+  ) exact = 5;
   if (pick.scorer && pick.scorer.trim() && result.scorers && result.scorers.length) {
     const target = pick.scorer.trim().toLowerCase();
     scorer = result.scorers.filter((s) => s.trim().toLowerCase() === target).length;
   }
-  return { scorer, outcome, exact, total: scorer + outcome + exact };
+  if (pick.qualifier && result.qualifier && pick.qualifier === result.qualifier) qualify = 2;
+  return { scorer, outcome, exact, qualify, total: scorer + outcome + exact + qualify };
 }
 
 // Hora de início do jogo, em UTC (as horas guardadas em RAW_MATCHES/RAW_KNOCKOUT
@@ -405,12 +403,12 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
   const isKnockout = match.group === null;
 
   const [draftPick, setDraftPick] = useState(
-    pick || { outcome: '', scoreA: '', scoreB: '', scorer: '' }
+    pick || { outcome: '', scoreA: '', scoreB: '', scorer: '', qualifier: '' }
   );
   const [adminOpen, setAdminOpen] = useState(false);
   const [othersOpen, setOthersOpen] = useState(false);
   const [draftResult, setDraftResult] = useState(
-    result || { scoreA: '', scoreB: '', scorers: [], live: false, finished: false, teamAName: '', teamBName: '' }
+    result || { scoreA: '', scoreB: '', scorers: [], live: false, finished: false, teamAName: '', teamBName: '', qualifier: '' }
   );
   const squadOptions = useMemo(
     () => [...(SQUADS[displayTeamA] || []), ...(SQUADS[displayTeamB] || [])],
@@ -435,21 +433,23 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
 
   const [adminPickName, setAdminPickName] = useState('');
   const [useNewPlayerName, setUseNewPlayerName] = useState(false);
-  const [adminPickDraft, setAdminPickDraft] = useState({ outcome: '', scoreA: '', scoreB: '', scorer: '' });
+  const [adminPickDraft, setAdminPickDraft] = useState({ outcome: '', scoreA: '', scoreB: '', scorer: '', qualifier: '' });
   const [adminScorerOther, setAdminScorerOther] = useState(false);
 
 
   useEffect(() => {
-    setDraftPick(pick || { outcome: '', scoreA: '', scoreB: '', scorer: '' });
+    setDraftPick(pick || { outcome: '', scoreA: '', scoreB: '', scorer: '', qualifier: '' });
   }, [pick]);
 
   useEffect(() => {
-    setDraftResult(result || { scoreA: '', scoreB: '', scorers: [], live: false, finished: false, teamAName: '', teamBName: '' });
+    setDraftResult(result || { scoreA: '', scoreB: '', scorers: [], live: false, finished: false, teamAName: '', teamBName: '', qualifier: '' });
   }, [result]);
 
   const finished = !!(result && result.finished);
   const pts = finished ? pointsFor(pick, result) : null;
-  const allCorrect = finished && pts && pts.exact > 0 && pts.outcome > 0 && pts.scorer > 0;
+  const allCorrect = finished && pts &&
+    pts.exact > 0 && pts.outcome > 0 && pts.scorer > 0 &&
+    (!isKnockout || pts.qualify > 0);
 
   function updatePick(partial) {
     const next = { ...draftPick, ...partial };
@@ -477,6 +477,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
       finished: extra.finished !== undefined ? extra.finished : draftResult.finished,
       teamAName: extra.teamAName !== undefined ? extra.teamAName : draftResult.teamAName || '',
       teamBName: extra.teamBName !== undefined ? extra.teamBName : draftResult.teamBName || '',
+      qualifier: extra.qualifier !== undefined ? extra.qualifier : draftResult.qualifier || '',
     };
     setDraftResult(payload);
     onSaveResult(match.id, payload);
@@ -671,6 +672,39 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
         {result && result.scorers && result.scorers.length > 0 && (
           <p className="text-xs text-slate-400">Marcaram: {result.scorers.join(', ')}</p>
         )}
+
+        {isKnockout && (
+          <BetLine
+            label="A qualificar"
+            sublabel="Qual das duas equipas passa?"
+            status={finished ? (pts.qualify > 0 ? (allCorrect ? 'gold' : 'correct') : 'wrong') : 'pending'}
+            points={finished ? `+${pts.qualify}` : '+2 pts'}
+          >
+            {pickEditable ? (
+              <div className="flex gap-2">
+                {[['A', displayTeamA], ['B', displayTeamB]].map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => commitPick({ qualifier: draftPick.qualifier === val ? '' : val })}
+                    className={`flex-1 rounded-lg px-2 py-2 text-xs font-bold truncate transition ${
+                      draftPick.qualifier === val
+                        ? 'bg-teal-500 text-slate-900'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-300">
+                {pick && pick.qualifier
+                  ? pick.qualifier === 'A' ? displayTeamA : displayTeamB
+                  : 'não escolheste'}
+              </p>
+            )}
+          </BetLine>
+        )}
       </div>
 
       <div className="border-t border-slate-700">
@@ -813,6 +847,22 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                   </select>
                 )}
               </div>
+              {isKnockout && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 shrink-0">Quem passa:</span>
+                  {[['A', displayTeamA], ['B', displayTeamB]].map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setDraftResult((d) => ({ ...d, qualifier: d.qualifier === val ? '' : val }))}
+                      className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-bold truncate transition ${
+                        draftResult.qualifier === val ? 'bg-teal-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-1.5 text-xs text-rose-300">
@@ -842,6 +892,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                       finished: draftResult.finished,
                       teamAName: draftResult.teamAName,
                       teamBName: draftResult.teamBName,
+                      qualifier: draftResult.qualifier || '',
                     })
                   }
                   className="rounded-lg bg-amber-500 text-slate-900 font-bold text-xs px-3 py-1.5"
@@ -882,7 +933,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                       if (e.target.value === '__new__') {
                         setUseNewPlayerName(true);
                         setAdminPickName('');
-                        setAdminPickDraft({ outcome: '', scoreA: '', scoreB: '', scorer: '' });
+                        setAdminPickDraft({ outcome: '', scoreA: '', scoreB: '', scorer: '', qualifier: '' });
                       } else {
                         setAdminPickName(e.target.value);
                         const existing = (otherPicks || []).find((p) => p.name === e.target.value);
@@ -896,7 +947,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                           });
                           setAdminScorerOther(!!p.scorer && !squadOptions.includes(p.scorer));
                         } else {
-                          setAdminPickDraft({ outcome: '', scoreA: '', scoreB: '', scorer: '' });
+                          setAdminPickDraft({ outcome: '', scoreA: '', scoreB: '', scorer: '', qualifier: '' });
                           setAdminScorerOther(false);
                         }
                       }
@@ -933,6 +984,22 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                   </button>
                 ))}
               </div>
+              {isKnockout && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 shrink-0 w-16">A qualif.</span>
+                  {[['A', displayTeamA], ['B', displayTeamB]].map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setAdminPickDraft((d) => ({ ...d, qualifier: d.qualifier === val ? '' : val }))}
+                      className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-bold truncate transition ${
+                        adminPickDraft.qualifier === val ? 'bg-teal-500 text-slate-900' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-400 w-16 truncate">Resultado</span>
                 <input
@@ -1010,7 +1077,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                 onClick={async () => {
                   if (!adminPickName.trim()) return;
                   await onAdminSavePick(adminPickName.trim(), match.id, adminPickDraft);
-                  setAdminPickDraft({ outcome: '', scoreA: '', scoreB: '', scorer: '' });
+                  setAdminPickDraft({ outcome: '', scoreA: '', scoreB: '', scorer: '', qualifier: '' });
                   setAdminPickName('');
                   setUseNewPlayerName(false);
                 }}
@@ -1208,12 +1275,7 @@ export default function App() {
 
   const leaderboard = useMemo(() => {
     const rows = allPicks.map(({ name, matches }) => {
-      let total = 0;
-      let exactCount = 0;
-      let outcomeCount = 0;
-      let scorerCount = 0;
-      let scorerPoints = 0;
-      let plenoCount = 0;
+      let total = 0, exactCount = 0, outcomeCount = 0, scorerCount = 0, scorerPoints = 0, plenoCount = 0, qualifyCount = 0;
       for (const m of allMatchesEver) {
         const pts = pointsFor(matches[m.id], results[m.id]);
         total += pts.total;
@@ -1221,8 +1283,9 @@ export default function App() {
         if (pts.outcome) outcomeCount++;
         if (pts.scorer) { scorerCount++; scorerPoints += pts.scorer; }
         if (pts.exact && pts.outcome && pts.scorer) plenoCount++;
+        if (pts.qualify) qualifyCount++;
       }
-      return { name, total, exactCount, outcomeCount, scorerCount, scorerPoints, plenoCount };
+      return { name, total, exactCount, outcomeCount, scorerCount, scorerPoints, plenoCount, qualifyCount };
     });
     rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     return rows;
@@ -1630,6 +1693,7 @@ export default function App() {
                 ['outcome',  '✅ Vencedores'],
                 ['scorer',   '⚽ Marcadores'],
                 ['pleno',    '🌟 Plenos'],
+                ['qualify',  '🎟️ Apuramentos'],
               ].map(([key, label]) => (
                 <button
                   key={key}
@@ -1653,6 +1717,7 @@ export default function App() {
                 if (lbSort === 'outcome') return b.outcomeCount - a.outcomeCount || b.total - a.total || a.name.localeCompare(b.name);
                 if (lbSort === 'scorer')  return b.scorerPoints - a.scorerPoints || b.scorerCount - a.scorerCount || a.name.localeCompare(b.name);
                 if (lbSort === 'pleno')   return b.plenoCount - a.plenoCount   || b.total - a.total || a.name.localeCompare(b.name);
+                if (lbSort === 'qualify') return b.qualifyCount - a.qualifyCount || b.total - a.total || a.name.localeCompare(b.name);
                 return b.total - a.total || a.name.localeCompare(b.name);
               })
               .map((row, i) => {
@@ -1690,6 +1755,7 @@ export default function App() {
                   : lbSort === 'outcome' ? `${row.outcomeCount} vencedores`
                   : lbSort === 'scorer'  ? `${row.scorerPoints} pts marcador`
                   : lbSort === 'pleno'   ? `${row.plenoCount} plenos 🌟`
+                  : lbSort === 'qualify' ? `${row.qualifyCount} apuramentos 🎟️`
                   : null;
 
                 const statValue =
@@ -1697,6 +1763,7 @@ export default function App() {
                   : lbSort === 'outcome' ? row.outcomeCount
                   : lbSort === 'scorer'  ? row.scorerPoints
                   : lbSort === 'pleno'   ? row.plenoCount
+                  : lbSort === 'qualify' ? row.qualifyCount
                   : row.total;
 
                 return (
@@ -1710,7 +1777,7 @@ export default function App() {
                       <p className="text-xs text-slate-400">
                         {highlight
                           ? <><span className="text-amber-300 font-semibold">{highlight}</span> · {row.total} pts total</>
-                          : <>{row.exactCount} exatos · {row.outcomeCount} venc. · {row.scorerCount} marc. · {row.plenoCount} plenos</>
+                          : <>{row.exactCount} exatos · {row.outcomeCount} venc. · {row.scorerCount} marc. · {row.plenoCount} plenos · {row.qualifyCount} apuram.</>
                         }
                       </p>
                     </div>
