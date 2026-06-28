@@ -1474,6 +1474,213 @@ export default function App() {
     return () => clearInterval(id);
   }, [stage, loadShared, loadAllPicks]);
 
+  // Polling da ESPN a cada 30s — só corre quando há jogos ao vivo ou iminentes.
+  // A ESPN dá placar + minuto em tempo real. Quando o placar sobe (golo novo),
+  // chama a API-Football (uma vez por jogo) para ir buscar o nome do marcador.
+  useEffect(() => {
+    if (stage !== 'app') return;
+    let cancelled = false;
+    let timeoutId = null;
+    const API_KEY = 'e8134025bc279c122c4863d841fc2edb';
+    const API_BASE = 'https://v3.football.api-sports.io';
+    const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world';
+
+    const stop = new Set(['do','da','de','e','and','of','the']);
+    const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    const words = s => norm(s).split(/\s+/).filter(w => w && !stop.has(w));
+    const teamsMatch = (a, b) => {
+      if (norm(a) === norm(b)) return true;
+      const wa = words(a), wb = words(b);
+      const [sh, lo] = wa.length <= wb.length ? [wa,wb] : [wb,wa];
+      return sh.every(w => lo.some(w2 => w2===w || w2.includes(w) || w.includes(w2)));
+    };
+    const TEAM_MAP = {
+      'México':'Mexico','África do Sul':'South Africa','Coreia do Sul':'South Korea',
+      'Chéquia':'Czech Republic','Canadá':'Canada','Bósnia e Herzegovina':'Bosnia',
+      'Catar':'Qatar','Suíça':'Switzerland','Brasil':'Brazil','Marrocos':'Morocco',
+      'Escócia':'Scotland','Estados Unidos':'USA','Alemanha':'Germany',
+      'Curaçao':'Curacao','Costa do Marfim':'Ivory Coast','Equador':'Ecuador',
+      'Holanda':'Netherlands','Suécia':'Sweden','Tunísia':'Tunisia',
+      'Bélgica':'Belgium','Egito':'Egypt','Irão':'Iran','Nova Zelândia':'New Zealand',
+      'Espanha':'Spain','Cabo Verde':'Cape Verde','Arábia Saudita':'Saudi Arabia',
+      'Uruguai':'Uruguay','França':'France','Noruega':'Norway',
+      'Argentina':'Argentina','Argélia':'Algeria','Áustria':'Austria',
+      'Jordânia':'Jordan','Portugal':'Portugal','Colômbia':'Colombia',
+      'Inglaterra':'England','Croácia':'Croatia','Gana':'Ghana',
+      'Panamá':'Panama','Japão':'Japan','Iraque':'Iraq',
+      'Senegal':'Senegal','Haiti':'Haiti','Usbequistão':'Uzbekistan',
+      'RD Congo':'DR Congo','Austrália':'Australia','Turquia':'Turkey','Paraguai':'Paraguay',
+    };
+
+    function matchKickoffUTC(match) {
+      const [h, min] = (match.time || '00:00').split(':').map(Number);
+      const d = new Date(`${match.date}T00:00:00Z`);
+      d.setUTCHours(h - 1, min, 0, 0); // Lisboa UTC+1 -> UTC
+      return d.getTime();
+    }
+
+    async function fetchEspnScorers(fixtureId) {
+      try {
+        const r = await fetch(`${API_BASE}/fixtures?id=${fixtureId}`, {
+          headers: { 'x-apisports-key': API_KEY }
+        });
+        const d = await r.json();
+        const full = (d.response || [])[0];
+        if (!full) return null;
+        return (full.events || [])
+          .filter(ev => ev.type === 'Goal' && ev.detail !== 'Missed Penalty')
+          .map(ev => ev.player?.name || '')
+          .filter(Boolean);
+      } catch (e) { return null; }
+    }
+
+    async function getApiFixtureId(match, current) {
+      // já temos o fixture id guardado?
+      if (current[match.id]?._fixtureId) return current[match.id]._fixtureId;
+      try {
+        const r = await fetch(`${API_BASE}/fixtures?date=${match.date}`, {
+          headers: { 'x-apisports-key': API_KEY }
+        });
+        const d = await r.json();
+        if (d.errors && Object.keys(d.errors).length > 0) return null;
+        const fixtures = (d.response || []).filter(f => f.league?.id === 1);
+        const a = TEAM_MAP[match.teamA] || match.teamA;
+        const b = TEAM_MAP[match.teamB] || match.teamB;
+        const found = fixtures.find(f => {
+          const h = f.teams?.home?.name || '';
+          const aw = f.teams?.away?.name || '';
+          return (teamsMatch(a,h) && teamsMatch(b,aw)) || (teamsMatch(b,h) && teamsMatch(a,aw));
+        });
+        return found?.fixture?.id || null;
+      } catch (e) { return null; }
+    }
+
+    async function poll() {
+      if (cancelled) return;
+      const allM = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
+      const now = Date.now();
+
+      // Verifica se há jogos ao vivo ou a começar em breve (<15min)
+      const hasActive = allM.some(m => {
+        const ko = matchKickoffUTC(m);
+        return now >= ko - 15 * 60 * 1000 && now <= ko + 130 * 60 * 1000;
+      });
+
+      if (!hasActive) {
+        // Nenhum jogo activo — acorda 10min antes do próximo
+        const nextKo = allM
+          .map(m => matchKickoffUTC(m))
+          .filter(t => t > now)
+          .sort((a,b) => a - b)[0];
+        const delay = nextKo ? Math.max(0, nextKo - now - 10 * 60 * 1000) : 3 * 60 * 60 * 1000;
+        if (!cancelled) timeoutId = setTimeout(poll, delay);
+        return;
+      }
+
+      try {
+        const r = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=20260611-20260719`);
+        if (!r.ok || cancelled) { timeoutId = setTimeout(poll, 30000); return; }
+        const data = await r.json();
+        const events = data.events || [];
+
+        let current = {};
+        try {
+          const s = await storage.get('results', true);
+          current = s && s.value ? JSON.parse(s.value) : {};
+        } catch (e) {}
+
+        let changed = false;
+        const toSave = { ...current };
+
+        for (const m of allM) {
+          const ko = matchKickoffUTC(m);
+          if (now < ko - 15 * 60 * 1000 || now > ko + 130 * 60 * 1000) continue;
+
+          const a = TEAM_MAP[m.teamA] || m.teamA;
+          const b = TEAM_MAP[m.teamB] || m.teamB;
+          const ev = events.find(e => {
+            const comp = e.competitions?.[0];
+            const home = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '';
+            const away = comp?.competitors?.find(c => c.homeAway === 'away')?.team?.displayName || '';
+            return (teamsMatch(a,home) && teamsMatch(b,away)) || (teamsMatch(b,home) && teamsMatch(a,away));
+          });
+          if (!ev) continue;
+
+          const comp = ev.competitions?.[0];
+          const status = comp?.status || {};
+          const state = status.type?.state;
+          const statusName = (status.type?.name || '').toUpperCase();
+          const homeComp = comp?.competitors?.find(c => c.homeAway === 'home');
+          const awayComp = comp?.competitors?.find(c => c.homeAway === 'away');
+
+          // Garante que homeComp corresponde a teamA
+          const swapped = teamsMatch(b, homeComp?.team?.displayName || '');
+          const scoreA = swapped ? awayComp?.score : homeComp?.score;
+          const scoreB = swapped ? homeComp?.score : awayComp?.score;
+
+          const live = state === 'in';
+          const finished = state === 'post';
+          const halftime = statusName === 'STATUS_HALFTIME';
+          const minuteNum = status.elapsed ?? null;
+          const minute = halftime ? null : (minuteNum != null ? String(minuteNum) : null);
+
+          const existing = toSave[m.id] || {};
+          const prevGoals = (Number(existing.scoreA)||0) + (Number(existing.scoreB)||0);
+          const nowGoals = (Number(scoreA)||0) + (Number(scoreB)||0);
+          const goalScored = nowGoals > prevGoals;
+          const goalDisallowed = nowGoals < prevGoals;
+
+          let scorers = existing.scorers || [];
+
+          // Golo novo ou anulado → chama API-Football para lista actualizada
+          if ((goalScored || goalDisallowed || (finished && !existing.finished && nowGoals > 0 && scorers.length === 0))) {
+            const fid = await getApiFixtureId(m, toSave);
+            if (fid) {
+              const fresh = await fetchEspnScorers(fid);
+              if (fresh) scorers = fresh;
+              else if (goalDisallowed) scorers = [];
+              // guarda o fixture id para não buscar de novo
+              toSave[m.id] = { ...(toSave[m.id] || {}), _fixtureId: fid };
+            }
+          }
+
+          const updated = {
+            ...existing,
+            scoreA: scoreA ?? existing.scoreA ?? '',
+            scoreB: scoreB ?? existing.scoreB ?? '',
+            live: live && !finished,
+            finished: finished || existing.finished || false,
+            halftime,
+            minute,
+            scorers,
+            _fixtureId: toSave[m.id]?._fixtureId || existing._fixtureId,
+          };
+
+          const diff =
+            updated.scoreA !== existing.scoreA ||
+            updated.scoreB !== existing.scoreB ||
+            updated.live !== existing.live ||
+            updated.finished !== existing.finished ||
+            updated.halftime !== existing.halftime ||
+            updated.minute !== existing.minute ||
+            JSON.stringify(updated.scorers) !== JSON.stringify(existing.scorers);
+
+          if (diff) { toSave[m.id] = updated; changed = true; }
+        }
+
+        if (changed && !cancelled) {
+          await storage.set('results', JSON.stringify(toSave), true);
+          setResults(toSave);
+        }
+      } catch (e) {}
+
+      if (!cancelled) timeoutId = setTimeout(poll, 30000);
+    }
+
+    poll();
+    return () => { cancelled = true; if (timeoutId) clearTimeout(timeoutId); };
+  }, [stage]);
+
   async function handleNameSubmit(e) {
     e.preventDefault();
     const trimmed = nameInput.trim();
