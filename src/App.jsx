@@ -1544,8 +1544,8 @@ export default function App() {
         const d = await r.json();
         if (d.errors && Object.keys(d.errors).length > 0) return null;
         const fixtures = (d.response || []).filter(f => f.league?.id === 1);
-        const a = TEAM_MAP[match.teamA] || match.teamA;
-        const b = TEAM_MAP[match.teamB] || match.teamB;
+        const a = TEAM_MAP[match.teamA] || (current[match.id]?.teamAName) || match.teamA;
+        const b = TEAM_MAP[match.teamB] || (current[match.id]?.teamBName) || match.teamB;
         const found = fixtures.find(f => {
           const h = f.teams?.home?.name || '';
           const aw = f.teams?.away?.name || '';
@@ -1596,8 +1596,8 @@ export default function App() {
           const ko = matchKickoffUTC(m);
           if (now < ko - 15 * 60 * 1000 || now > ko + 130 * 60 * 1000) continue;
 
-          const a = TEAM_MAP[m.teamA] || m.teamA;
-          const b = TEAM_MAP[m.teamB] || m.teamB;
+          const a = TEAM_MAP[m.teamA] || (current[m.id]?.teamAName) || m.teamA;
+          const b = TEAM_MAP[m.teamB] || (current[m.id]?.teamBName) || m.teamB;
           const ev = events.find(e => {
             const comp = e.competitions?.[0];
             const home = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '';
