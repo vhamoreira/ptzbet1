@@ -458,6 +458,10 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
     const b = next.scoreB !== '' && next.scoreB !== undefined ? Number(next.scoreB) : null;
     if (a !== null && b !== null && !isNaN(a) && !isNaN(b)) {
       next.outcome = a > b ? 'A' : a < b ? 'B' : 'D';
+      // Em jogos eliminatórios, inferir também quem se qualifica (empate = indefinido, alguém passa nos penaltis)
+      if (isKnockout && a !== b) {
+        next.qualifier = a > b ? 'A' : 'B';
+      }
     }
     setDraftPick(next);
     return next;
@@ -1009,8 +1013,10 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                   onChange={(e) => setAdminPickDraft((d) => {
                     const next = { ...d, scoreA: e.target.value };
                     const a = Number(next.scoreA), b = Number(next.scoreB);
-                    if (next.scoreA !== '' && next.scoreB !== '' && !isNaN(a) && !isNaN(b))
+                    if (next.scoreA !== '' && next.scoreB !== '' && !isNaN(a) && !isNaN(b)) {
                       next.outcome = a > b ? 'A' : a < b ? 'B' : 'D';
+                      if (isKnockout && a !== b) next.qualifier = a > b ? 'A' : 'B';
+                    }
                     return next;
                   })}
                   className="w-12 text-center rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1"
@@ -1023,8 +1029,10 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                   onChange={(e) => setAdminPickDraft((d) => {
                     const next = { ...d, scoreB: e.target.value };
                     const a = Number(next.scoreA), b = Number(next.scoreB);
-                    if (next.scoreA !== '' && next.scoreB !== '' && !isNaN(a) && !isNaN(b))
+                    if (next.scoreA !== '' && next.scoreB !== '' && !isNaN(a) && !isNaN(b)) {
                       next.outcome = a > b ? 'A' : a < b ? 'B' : 'D';
+                      if (isKnockout && a !== b) next.qualifier = a > b ? 'A' : 'B';
+                    }
                     return next;
                   })}
                   className="w-12 text-center rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1"
