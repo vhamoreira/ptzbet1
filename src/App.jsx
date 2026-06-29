@@ -769,7 +769,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                     {p.outcome ? (p.outcome === 'A' ? displayTeamA : p.outcome === 'B' ? displayTeamB : 'Empate') : '—'}
                     {p.scoreA !== '' && p.scoreB !== '' ? ` (${p.scoreA}-${p.scoreB})` : ''}
                     {p.scorer ? ` · ${p.scorer}` : ''}
-                    {isKnockout && p.qualifier ? ` · passa ${p.qualifier === 'A' ? displayTeamA : displayTeamB}` : ''}
+                    {isKnockout && p.qualifier ? ` · Q: ${p.qualifier === 'A' ? displayTeamA : displayTeamB}` : ''}
                     {finished && ptsOther ? ` · +${ptsOther.total}` : ''}
                   </span>
                 </div>
