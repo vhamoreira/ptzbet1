@@ -1485,14 +1485,11 @@ export default function App() {
   }, [stage, loadShared, loadAllPicks]);
 
   // Polling da ESPN a cada 30s — só corre quando há jogos ao vivo ou iminentes.
-  // A ESPN dá placar + minuto em tempo real. Quando o placar sobe (golo novo),
-  // chama a API-Football (uma vez por jogo) para ir buscar o nome do marcador.
+  // A ESPN dá placar + minuto + marcadores em tempo real.
   useEffect(() => {
     if (stage !== 'app') return;
     let cancelled = false;
     let timeoutId = null;
-    const API_KEY = 'e8134025bc279c122c4863d841fc2edb';
-    const API_BASE = 'https://v3.football.api-sports.io';
     const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world';
 
     const stop = new Set(['do','da','de','e','and','of','the']);
