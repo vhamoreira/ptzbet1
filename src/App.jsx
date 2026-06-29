@@ -1442,8 +1442,10 @@ export default function App() {
 
         let updated = false;
         for (const match of needScorers) {
-          const a = TEAM_MAP[match.teamA] || current[match.id]?.teamAName || match.teamA;
-          const b = TEAM_MAP[match.teamB] || current[match.id]?.teamBName || match.teamB;
+          const rawA = TEAM_MAP[match.teamA] ? match.teamA : (current[match.id]?.teamAName || match.teamA);
+          const rawB = TEAM_MAP[match.teamB] ? match.teamB : (current[match.id]?.teamBName || match.teamB);
+          const a = TEAM_MAP[rawA] || rawA;
+          const b = TEAM_MAP[rawB] || rawB;
           const ev = events.find(e => {
             const comp = e.competitions?.[0];
             const home = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '';
@@ -1581,8 +1583,10 @@ export default function App() {
           const ko = matchKickoffUTC(m);
           if (now < ko - 15 * 60 * 1000 || now > ko + 150 * 60 * 1000) continue;
 
-          const a = TEAM_MAP[m.teamA] || (current[m.id]?.teamAName) || m.teamA;
-          const b = TEAM_MAP[m.teamB] || (current[m.id]?.teamBName) || m.teamB;
+          const rawA = TEAM_MAP[m.teamA] ? m.teamA : (current[m.id]?.teamAName || m.teamA);
+          const rawB = TEAM_MAP[m.teamB] ? m.teamB : (current[m.id]?.teamBName || m.teamB);
+          const a = TEAM_MAP[rawA] || rawA;
+          const b = TEAM_MAP[rawB] || rawB;
           const ev = events.find(e => {
             const comp = e.competitions?.[0];
             const home = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '';
