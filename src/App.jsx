@@ -2179,11 +2179,6 @@ export default function App() {
                           onClick={() => { setHistoryPlayer(row.name); setComparePlayer(null); }}
                         >{row.name}</button>
                         {isPodium && <span className="text-xs text-slate-400 shrink-0">🍽️</span>}
-                        <button
-                          className="shrink-0 text-xs text-slate-500 hover:text-sky-400 transition ml-auto"
-                          onClick={() => { setHistoryPlayer(row.name); setComparePlayer(null); }}
-                          title="Ver histórico"
-                        >⇄</button>
                       </div>
                       <p className="text-xs text-slate-400">
                         {highlight
@@ -2195,6 +2190,11 @@ export default function App() {
                         <p className="text-xs text-amber-300 font-bold mt-0.5">🌭 Rei dos Cachorros</p>
                       )}
                     </div>
+                    <button
+                      className="shrink-0 text-sm text-slate-500 hover:text-sky-400 transition px-1"
+                      onClick={() => { setHistoryPlayer(row.name); setComparePlayer(null); }}
+                      title="Ver histórico / comparar"
+                    >⇄</button>
                     <span style={displayFont} className={`px-3 py-1 rounded-lg border tabular-nums font-bold ${scoreClass}`}>
                       {statValue}
                     </span>
