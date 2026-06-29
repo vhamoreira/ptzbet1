@@ -814,7 +814,9 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
               const liveTotal = liveOther
                 ? (liveOther.exact === 'winning' ? 5 : 0) + (liveOther.outcome === 'winning' ? 3 : 0) + (liveOther.scorer === 'winning' ? 1 : 0)
                 : 0;
-              const liveLosing = liveOther && (liveOther.exact === 'losing' || liveOther.outcome === 'losing');
+              // Só fica vermelho se o resultado exato já é impossível E o VED também já perdeu
+              // (o VED nunca fica losing ao vivo, por isso liveLosing nunca é true — mostra neutro)
+              const liveLosing = false;
               return (
                 <div key={name} className="flex items-center justify-between text-xs">
                   <span className={`truncate ${name === myName ? 'text-amber-300 font-bold' : 'text-slate-300'}`}>
