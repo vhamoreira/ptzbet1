@@ -684,10 +684,6 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
           )}
         </BetLine>
 
-        {result && result.scorers && result.scorers.length > 0 && (
-          <p className="text-xs text-slate-400">Marcaram: {result.scorers.join(', ')}</p>
-        )}
-
         {isKnockout && (
           <BetLine
             label="A qualificar"
@@ -719,6 +715,10 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
               </p>
             )}
           </BetLine>
+        )}
+
+        {result && result.scorers && result.scorers.length > 0 && (
+          <p className="text-xs text-slate-400">Marcaram: {result.scorers.join(', ')}</p>
         )}
       </div>
 
