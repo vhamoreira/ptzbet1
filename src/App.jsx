@@ -324,17 +324,73 @@ function pointsFor(pick, result) {
     scorer = result.scorers.filter((s) => {
       const n = normStr(s);
       if (n === target) return true;
-      // apelido igual (última palavra)
       const lastA = target.split(' ').pop();
       const lastB = n.split(' ').pop();
       if (lastA && lastA.length > 2 && lastA === lastB) return true;
-      // um contém o outro (ex: "Vinícius" em "Vinícius Júnior")
       if (n.includes(target) || target.includes(n)) return true;
       return false;
     }).length;
   }
   if (pick.qualifier && result.qualifier && pick.qualifier === result.qualifier) qualify = 2;
   return { scorer, outcome, exact, qualify, total: scorer + outcome + exact + qualify };
+}
+
+// Avalia o estado parcial de cada dimensão de aposta durante o jogo ao vivo.
+// Devolve 'winning' | 'losing' | 'open' para cada dimensão.
+// 'open' = ainda é possível ganhar (ex: estamos 0-0 e apostou 1-0)
+// 'winning' = está a ganhar neste momento
+// 'losing' = já não é possível ganhar (matematicamente impossível)
+function liveStatusFor(pick, result) {
+  if (!pick || !result || !result.live) return null;
+  const normStr = (s) => s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const sA = Number(result.scoreA) || 0;
+  const sB = Number(result.scoreB) || 0;
+  const pA = pick.scoreA !== '' && pick.scoreA !== undefined ? Number(pick.scoreA) : null;
+  const pB = pick.scoreB !== '' && pick.scoreB !== undefined ? Number(pick.scoreB) : null;
+
+  // Resultado exato: impossível se já há mais golos do que o apostado em qualquer equipa
+  let exact = 'open';
+  if (pA !== null && pB !== null) {
+    if (sA > pA || sB > pB) exact = 'losing';
+    else if (sA === pA && sB === pB) exact = 'winning';
+  }
+
+  // Vencedor/empate: impossível se o resultado actual já torna inatingível o apostado
+  let outcome = 'open';
+  if (pick.outcome) {
+    const curOutcome = outcomeOf(sA, sB);
+    if (pick.outcome === 'A') {
+      // apostou A: perde se B já tem mais golos e a diferença é irreversível
+      // não sabemos quantos golos faltam, por isso só marcamos losing se B>A e é matematicamente impossível
+      // simplificação: se o resultado atual é o oposto do apostado, está a perder
+      if (curOutcome === 'B') outcome = 'losing';
+      else if (curOutcome === 'A') outcome = 'winning';
+    } else if (pick.outcome === 'B') {
+      if (curOutcome === 'A') outcome = 'losing';
+      else if (curOutcome === 'B') outcome = 'winning';
+    } else { // empate
+      if (curOutcome !== 'D') outcome = 'losing';
+      else outcome = 'winning';
+    }
+  }
+
+  // Marcador: winning se já marcou, open se ainda não marcou, losing nunca (pode marcar ainda)
+  let scorer = 'open';
+  if (pick.scorer && result.scorers && result.scorers.length) {
+    const target = normStr(pick.scorer);
+    const found = result.scorers.some(s => {
+      const n = normStr(s);
+      if (n === target) return true;
+      const lastA = target.split(' ').pop();
+      const lastB = n.split(' ').pop();
+      if (lastA && lastA.length > 2 && lastA === lastB) return true;
+      if (n.includes(target) || target.includes(n)) return true;
+      return false;
+    });
+    if (found) scorer = 'winning';
+  }
+
+  return { exact, outcome, scorer };
 }
 
 // Hora de início do jogo, em UTC (as horas guardadas em RAW_MATCHES/RAW_KNOCKOUT
@@ -457,7 +513,9 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
   }, [result]);
 
   const finished = !!(result && result.finished);
+  const isLive = !!(result && result.live && !finished);
   const pts = finished ? pointsFor(pick, result) : null;
+  const liveStatus = isLive ? liveStatusFor(pick, result) : null;
   const allCorrect = finished && pts &&
     pts.exact > 0 && pts.outcome > 0 && pts.scorer > 0 &&
     (!isKnockout || pts.qualify > 0);
@@ -498,7 +556,6 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
     onSaveResult(match.id, payload);
   }
 
-  const isLive = !!(result && result.live && !finished);
   const hasKickedOff = Date.now() >= matchKickoffUTC(match);
   const pickEditable = !finished && !hasKickedOff;
 
@@ -586,7 +643,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
         <BetLine
           label="Resultado exato"
           sublabel="O placar final certinho"
-          status={finished ? (allCorrect ? 'gold' : pts.exact > 0 ? 'correct' : 'wrong') : 'pending'}
+          status={finished ? (allCorrect ? 'gold' : pts.exact > 0 ? 'correct' : 'wrong') : isLive && liveStatus ? (liveStatus.exact === 'winning' ? 'correct' : liveStatus.exact === 'losing' ? 'wrong' : 'pending') : 'pending'}
           points={finished ? `+${pts.exact}` : '+5 pts'}
         >
           {pickEditable ? (
@@ -619,7 +676,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
         <BetLine
           label="Resultado (V/E/D)"
           sublabel="Vitória, empate ou derrota"
-          status={finished ? (allCorrect ? 'gold' : pts.outcome > 0 ? 'correct' : 'wrong') : 'pending'}
+          status={finished ? (allCorrect ? 'gold' : pts.outcome > 0 ? 'correct' : 'wrong') : isLive && liveStatus ? (liveStatus.outcome === 'winning' ? 'correct' : liveStatus.outcome === 'losing' ? 'wrong' : 'pending') : 'pending'}
           points={finished ? `+${pts.outcome}` : '+3 pts'}
         >
           {pickEditable ? (
@@ -658,7 +715,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
         <BetLine
           label="Marcador"
           sublabel="+1 ponto por cada golo dele"
-          status={finished ? (allCorrect ? 'gold' : pts.scorer > 0 ? 'correct' : 'wrong') : 'pending'}
+          status={finished ? (allCorrect ? 'gold' : pts.scorer > 0 ? 'correct' : 'wrong') : isLive && liveStatus ? (liveStatus.scorer === 'winning' ? 'correct' : 'pending') : 'pending'}
           points={finished ? `+${pts.scorer}` : '+1/golo'}
         >
           {pickEditable ? (
@@ -760,17 +817,23 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
             )}
             {otherPicks.map(({ name, pick: p }) => {
               const ptsOther = finished ? pointsFor(p, result) : null;
+              const liveOther = isLive ? liveStatusFor(p, result) : null;
+              const liveTotal = liveOther
+                ? (liveOther.exact === 'winning' ? 5 : 0) + (liveOther.outcome === 'winning' ? 3 : 0) + (liveOther.scorer === 'winning' ? 1 : 0)
+                : 0;
+              const liveLosing = liveOther && (liveOther.exact === 'losing' || liveOther.outcome === 'losing');
               return (
                 <div key={name} className="flex items-center justify-between text-xs">
                   <span className={`truncate ${name === myName ? 'text-amber-300 font-bold' : 'text-slate-300'}`}>
                     {name}
                   </span>
-                  <span className="text-slate-400 truncate ml-2">
+                  <span className={`truncate ml-2 ${finished ? (ptsOther?.total > 0 ? 'text-emerald-400' : 'text-rose-400') : isLive ? (liveLosing ? 'text-rose-400' : liveTotal > 0 ? 'text-emerald-400' : 'text-slate-400') : 'text-slate-400'}`}>
                     {p.outcome ? (p.outcome === 'A' ? displayTeamA : p.outcome === 'B' ? displayTeamB : 'Empate') : '—'}
                     {p.scoreA !== '' && p.scoreB !== '' ? ` (${p.scoreA}-${p.scoreB})` : ''}
                     {p.scorer ? ` · ${p.scorer}` : ''}
                     {isKnockout && p.qualifier ? ` · Q: ${p.qualifier === 'A' ? displayTeamA : displayTeamB}` : ''}
                     {finished && ptsOther ? ` · +${ptsOther.total}` : ''}
+                    {isLive && liveOther ? ` · ${liveTotal > 0 ? `+${liveTotal}` : liveLosing ? '✗' : '~'}` : ''}
                   </span>
                 </div>
               );
