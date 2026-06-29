@@ -1192,6 +1192,8 @@ export default function App() {
   const [filterGroup, setFilterGroup] = useState('Todos');
   const [proximosDays, setProximosDays] = useState(3);
   const [lbSort, setLbSort] = useState('total');
+  const [historyPlayer, setHistoryPlayer] = useState(null);
+  const [comparePlayer, setComparePlayer] = useState(null);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -1281,6 +1283,20 @@ export default function App() {
       .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   }, [extraMatches]);
 
+  function buildPlayerHistory(name) {
+    const playerData = allPicks.find((p) => p.name === name);
+    const picks = playerData ? playerData.matches : {};
+    return allMatchesEver
+      .filter((m) => results[m.id] && results[m.id].finished)
+      .map((m) => {
+        const pick = picks[m.id];
+        const result = results[m.id];
+        const pts = pointsFor(pick, result);
+        return { match: m, pick, result, pts };
+      })
+      .reverse();
+  }
+
   const leaderboard = useMemo(() => {
     const rows = allPicks.map(({ name, matches }) => {
       let total = 0, exactCount = 0, outcomeCount = 0, scorerCount = 0, scorerPoints = 0, plenoCount = 0, qualifyCount = 0;
@@ -1349,14 +1365,13 @@ export default function App() {
     }
   }, [stage, myName, loadShared, loadMyPicks, loadAllPicks]);
 
-  // Ao abrir a app, vai buscar marcadores em falta à API-Football para todos
-  // os jogos terminados que ainda não têm marcadores guardados.
+  // Ao abrir a app, vai buscar marcadores em falta à ESPN para todos
+  // os jogos terminados — usa displayName (nomes completos) que fazem match
+  // com os palpites dos utilizadores.
   useEffect(() => {
     if (stage !== 'app') return;
     (async () => {
-      const API_KEY = 'e8134025bc279c122c4863d841fc2edb';
-      const API_BASE = 'https://v3.football.api-sports.io';
-
+      const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world';
       const stop = new Set(['do','da','de','e','and','of','the']);
       const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
       const words = s => norm(s).split(/\s+/).filter(w => w && !stop.has(w));
@@ -1384,15 +1399,14 @@ export default function App() {
         'RD Congo':'DR Congo','Austrália':'Australia','Turquia':'Turkey','Paraguai':'Paraguay',
       };
 
-      // Lê resultados actuais
       let current = {};
       try {
         const r = await storage.get('results', true);
         current = r && r.value ? JSON.parse(r.value) : {};
       } catch (e) { return; }
 
-      // Encontra jogos terminados sem marcadores (mas com golos),
-      // OU jogos a partir de 27 de junho (força atualização com nomes exactos da API)
+      // Jogos terminados com golos mas sem marcadores (ou com nomes abreviados
+      // — força atualização para jogos de 27 junho em diante)
       const FORCE_FROM = '2026-06-27';
       const allM = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
       const needScorers = allM.filter(m => {
@@ -1406,62 +1420,44 @@ export default function App() {
 
       if (needScorers.length === 0) return;
 
-      // Agrupa por data
-      const byDate = {};
-      for (const m of needScorers) {
-        if (!byDate[m.date]) byDate[m.date] = [];
-        byDate[m.date].push(m);
-      }
+      try {
+        const res = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=20260611-20260719`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const events = data.events || [];
 
-      let updated = false;
-
-      for (const date of Object.keys(byDate).sort()) {
-        try {
-          const res = await fetch(`${API_BASE}/fixtures?date=${date}`, {
-            headers: { 'x-apisports-key': API_KEY }
+        let updated = false;
+        for (const match of needScorers) {
+          const a = TEAM_MAP[match.teamA] || current[match.id]?.teamAName || match.teamA;
+          const b = TEAM_MAP[match.teamB] || current[match.id]?.teamBName || match.teamB;
+          const ev = events.find(e => {
+            const comp = e.competitions?.[0];
+            const home = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '';
+            const away = comp?.competitors?.find(c => c.homeAway === 'away')?.team?.displayName || '';
+            return (teamsMatch(a,home) && teamsMatch(b,away)) || (teamsMatch(b,home) && teamsMatch(a,away));
           });
-          const data = await res.json();
-          if (data.errors && Object.keys(data.errors).length > 0) continue;
-          const fixtures = (data.response || []).filter(f => f.league?.id === 1);
+          if (!ev) continue;
 
-          for (const match of byDate[date]) {
-            const a = TEAM_MAP[match.teamA] || match.teamA;
-            const b = TEAM_MAP[match.teamB] || match.teamB;
-            const found = fixtures.find(f => {
-              const h = f.teams?.home?.name || '';
-              const aw = f.teams?.away?.name || '';
-              return (teamsMatch(a,h) && teamsMatch(b,aw)) || (teamsMatch(b,h) && teamsMatch(a,aw));
-            });
-            if (!found) continue;
+          const details = ev.competitions?.[0]?.details || [];
+          const scorers = details
+            .filter(d => {
+              const t = (d.type?.text || d.type?.abbreviation || '').toLowerCase();
+              return t.includes('goal') && !t.includes('disallowed') && !t.includes('missed');
+            })
+            .map(d => d.athletesInvolved?.[0]?.displayName || '')
+            .filter(Boolean);
 
-            await new Promise(r => setTimeout(r, 300));
-            const res2 = await fetch(`${API_BASE}/fixtures?id=${found.fixture?.id}`, {
-              headers: { 'x-apisports-key': API_KEY }
-            });
-            const data2 = await res2.json();
-            const full = (data2.response || [])[0];
-            if (!full) continue;
-
-            const scorers = (full.events || [])
-              .filter(ev => ev.type === 'Goal' && ev.detail !== 'Missed Penalty')
-              .map(ev => ev.player?.name || '')
-              .filter(Boolean);
-
-            if (scorers.length > 0) {
-              current = { ...current, [match.id]: { ...current[match.id], scorers } };
-              updated = true;
-            }
+          if (scorers.length > 0) {
+            current = { ...current, [match.id]: { ...current[match.id], scorers } };
+            updated = true;
           }
-          await new Promise(r => setTimeout(r, 200));
-        } catch (e) { /* segue para a próxima data */ }
-      }
+        }
 
-      if (updated) {
-        try {
+        if (updated) {
           await storage.set('results', JSON.stringify(current), true);
           setResults(current);
-        } catch (e) {}
-      }
+        }
+      } catch (e) {}
     })();
   }, [stage]);
 
@@ -1519,40 +1515,18 @@ export default function App() {
       return d.getTime();
     }
 
-    async function fetchEspnScorers(fixtureId) {
-      try {
-        const r = await fetch(`${API_BASE}/fixtures?id=${fixtureId}`, {
-          headers: { 'x-apisports-key': API_KEY }
-        });
-        const d = await r.json();
-        const full = (d.response || [])[0];
-        if (!full) return null;
-        return (full.events || [])
-          .filter(ev => ev.type === 'Goal' && ev.detail !== 'Missed Penalty')
-          .map(ev => ev.player?.name || '')
-          .filter(Boolean);
-      } catch (e) { return null; }
-    }
-
-    async function getApiFixtureId(match, current) {
-      // já temos o fixture id guardado?
-      if (current[match.id]?._fixtureId) return current[match.id]._fixtureId;
-      try {
-        const r = await fetch(`${API_BASE}/fixtures?date=${match.date}`, {
-          headers: { 'x-apisports-key': API_KEY }
-        });
-        const d = await r.json();
-        if (d.errors && Object.keys(d.errors).length > 0) return null;
-        const fixtures = (d.response || []).filter(f => f.league?.id === 1);
-        const a = TEAM_MAP[match.teamA] || (current[match.id]?.teamAName) || match.teamA;
-        const b = TEAM_MAP[match.teamB] || (current[match.id]?.teamBName) || match.teamB;
-        const found = fixtures.find(f => {
-          const h = f.teams?.home?.name || '';
-          const aw = f.teams?.away?.name || '';
-          return (teamsMatch(a,h) && teamsMatch(b,aw)) || (teamsMatch(b,h) && teamsMatch(a,aw));
-        });
-        return found?.fixture?.id || null;
-      } catch (e) { return null; }
+    // Extrai marcadores directamente do evento ESPN — usa displayName (nome
+    // completo) em vez dos nomes abreviados que a API-Football devolvia.
+    function scorersFromEspnEvent(ev) {
+      const comp = ev.competitions?.[0];
+      const details = comp?.details || [];
+      return details
+        .filter(d => {
+          const t = (d.type?.text || d.type?.abbreviation || '').toLowerCase();
+          return t.includes('goal') && !t.includes('disallowed') && !t.includes('missed');
+        })
+        .map(d => d.athletesInvolved?.[0]?.displayName || '')
+        .filter(Boolean);
     }
 
     async function poll() {
@@ -1627,22 +1601,10 @@ export default function App() {
           const existing = toSave[m.id] || {};
           const prevGoals = (Number(existing.scoreA)||0) + (Number(existing.scoreB)||0);
           const nowGoals = (Number(scoreA)||0) + (Number(scoreB)||0);
-          const goalScored = nowGoals > prevGoals;
-          const goalDisallowed = nowGoals < prevGoals;
 
-          let scorers = existing.scorers || [];
-
-          // Golo novo ou anulado → chama API-Football para lista actualizada
-          if ((goalScored || goalDisallowed || (finished && !existing.finished && nowGoals > 0 && scorers.length === 0))) {
-            const fid = await getApiFixtureId(m, toSave);
-            if (fid) {
-              const fresh = await fetchEspnScorers(fid);
-              if (fresh) scorers = fresh;
-              else if (goalDisallowed) scorers = [];
-              // guarda o fixture id para não buscar de novo
-              toSave[m.id] = { ...(toSave[m.id] || {}), _fixtureId: fid };
-            }
-          }
+          // Marcadores vêm directamente dos details[] da ESPN — nomes completos
+          const espnScorers = scorersFromEspnEvent(ev);
+          const scorers = espnScorers.length > 0 ? espnScorers : (existing.scorers || []);
 
           const updated = {
             ...existing,
@@ -1653,7 +1615,6 @@ export default function App() {
             halftime,
             minute,
             scorers,
-            _fixtureId: toSave[m.id]?._fixtureId || existing._fixtureId,
           };
 
           const diff =
@@ -1882,10 +1843,6 @@ export default function App() {
               </button>
             ))}
           </div>
-
-          <p className="text-center text-xs text-slate-500 mt-2">
-            Resultado exato +5 · V/E/D certo +3 · Marcador +1 por golo
-          </p>
         </div>
       </div>
 
@@ -2097,13 +2054,23 @@ export default function App() {
                   : lbSort === 'qualify' ? row.qualifyCount
                   : row.total;
 
+                const isPlenoKing = lbSort === 'pleno' && isFirst && row.plenoCount > 0;
+
                 return (
                   <div key={row.name} className={`flex items-center gap-3 rounded-xl px-3 py-3 border ${cardClass}`}>
                     <div className="w-6 flex items-center justify-center shrink-0">{rankEl}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="font-bold truncate text-stone-100">{row.name}</p>
+                        <button
+                          className="font-bold truncate text-stone-100 hover:text-amber-300 transition text-left"
+                          onClick={() => { setHistoryPlayer(row.name); setComparePlayer(null); }}
+                        >{row.name}</button>
                         {isPodium && <span className="text-xs text-slate-400 shrink-0">🍽️</span>}
+                        <button
+                          className="shrink-0 text-xs text-slate-500 hover:text-sky-400 transition ml-auto"
+                          onClick={() => { setHistoryPlayer(row.name); setComparePlayer(null); }}
+                          title="Ver histórico"
+                        >⇄</button>
                       </div>
                       <p className="text-xs text-slate-400">
                         {highlight
@@ -2111,6 +2078,9 @@ export default function App() {
                           : <>{row.exactCount} exatos · {row.outcomeCount} venc. · {row.scorerCount} marc. · {row.plenoCount} plenos · {row.qualifyCount} apuram.</>
                         }
                       </p>
+                      {isPlenoKing && (
+                        <p className="text-xs text-amber-300 font-bold mt-0.5">🌭 Rei dos Cachorros</p>
+                      )}
                     </div>
                     <span style={displayFont} className={`px-3 py-1 rounded-lg border tabular-nums font-bold ${scoreClass}`}>
                       {statValue}
@@ -2119,9 +2089,162 @@ export default function App() {
                 );
               })
             }
-            <p className="text-xs text-slate-600 text-center mt-1">🍽️ Os dois primeiros lugares (por pontos) ganham jantar pago</p>
+            {lbSort !== 'pleno' && (
+              <p className="text-xs text-slate-600 text-center mt-1">🍽️ Os dois primeiros lugares (por pontos) ganham jantar pago</p>
+            )}
+            {lbSort === 'pleno' && (
+              <p className="text-xs text-slate-600 text-center mt-1">🌭 O 1º lugar em Plenos é o Rei dos Cachorros</p>
+            )}
           </div>
         )}
+      </div>
+
+      {historyPlayer && (
+        <PlayerHistoryModal
+          playerA={historyPlayer}
+          playerB={comparePlayer}
+          knownPlayers={knownPlayers}
+          buildHistory={buildPlayerHistory}
+          onClose={() => { setHistoryPlayer(null); setComparePlayer(null); }}
+          onChangeCompare={setComparePlayer}
+        />
+      )}
+    </div>
+  );
+}
+
+function PlayerHistoryModal({ playerA, playerB, knownPlayers, buildHistory, onClose, onChangeCompare }) {
+  const historyA = React.useMemo(() => buildHistory(playerA), [playerA, buildHistory]);
+  const historyB = React.useMemo(() => (playerB ? buildHistory(playerB) : null), [playerB, buildHistory]);
+
+  const totalA = historyA.reduce((s, h) => s + h.pts.total, 0);
+  const totalB = historyB ? historyB.reduce((s, h) => s + h.pts.total, 0) : null;
+
+  const historyBByMatch = React.useMemo(() => {
+    if (!historyB) return {};
+    const map = {};
+    for (const h of historyB) map[h.match.id] = h;
+    return map;
+  }, [historyB]);
+
+  const otherPlayers = knownPlayers.filter((n) => n !== playerA);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 shrink-0">
+          <div className="min-w-0">
+            <p className="font-bold text-stone-100 truncate">
+              {playerB ? `${playerA} vs ${playerB}` : playerA}
+            </p>
+            <p className="text-xs text-slate-400">
+              {playerB
+                ? `${totalA} pts vs ${totalB} pts (dif. ${totalA - totalB > 0 ? '+' : ''}${totalA - totalB})`
+                : `${totalA} pts no total`}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 flex items-center justify-center"
+          >✕</button>
+        </div>
+
+        <div className="px-4 py-2.5 border-b border-slate-700 shrink-0">
+          <p className="text-xs text-slate-500 mb-1.5">Comparar com:</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => onChangeCompare(null)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+                !playerB ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+              }`}
+            >Ninguém</button>
+            {otherPlayers.map((n) => (
+              <button
+                key={n}
+                onClick={() => onChangeCompare(n)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border truncate max-w-[120px] ${
+                  playerB === n ? 'bg-sky-500 text-slate-900 border-sky-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+                }`}
+              >{n}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2">
+          {historyA.length === 0 && (
+            <p className="text-slate-500 text-sm text-center py-8">Ainda não há jogos terminados.</p>
+          )}
+          {historyA.map(({ match, pick, result, pts }) => {
+            const entryB = historyB ? historyBByMatch[match.id] : null;
+            const diff = entryB ? pts.total - entryB.pts.total : 0;
+
+            const PickLine = ({ p, pt, label }) => (
+              <div className="flex-1 min-w-0">
+                {label && <p className="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">{label}</p>}
+                {p ? (
+                  <p className="text-xs text-slate-300 truncate">
+                    {p.scoreA ?? '?'}-{p.scoreB ?? '?'}
+                    {p.scorer ? ` · ${p.scorer}` : ''}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-600 italic">sem palpite</p>
+                )}
+                <p className={`text-xs font-bold ${pt.total > 0 ? 'text-emerald-400' : 'text-slate-600'}`}>
+                  +{pt.total} pts
+                  {pt.total > 0 && (
+                    <span className="text-slate-500 font-normal">
+                      {' '}({[
+                        pt.exact ? `${pt.exact} exato` : null,
+                        pt.outcome ? `${pt.outcome} venc.` : null,
+                        pt.scorer ? `${pt.scorer} marc.` : null,
+                        pt.qualify ? `${pt.qualify} apuram.` : null,
+                      ].filter(Boolean).join(', ')})
+                    </span>
+                  )}
+                </p>
+              </div>
+            );
+
+            const teamA = result.teamAName || match.teamA;
+            const teamB = result.teamBName || match.teamB;
+
+            return (
+              <div
+                key={match.id}
+                className={`rounded-xl border px-3 py-2.5 ${
+                  entryB
+                    ? diff > 0 ? 'bg-emerald-500/10 border-emerald-500/30'
+                    : diff < 0 ? 'bg-rose-500/10 border-rose-500/30'
+                    : 'bg-slate-800 border-slate-700'
+                    : 'bg-slate-800 border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-semibold text-slate-300 truncate">
+                    {teamA} {result.scoreA}-{result.scoreB} {teamB}
+                  </p>
+                  <p className="text-[10px] text-slate-500 shrink-0 ml-2">{match.date}</p>
+                </div>
+                {result.scorers && result.scorers.length > 0 && (
+                  <p className="text-[10px] text-slate-500 mb-1.5">
+                    ⚽ {Object.entries(
+                      result.scorers.reduce((acc, name) => { acc[name] = (acc[name] || 0) + 1; return acc; }, {})
+                    ).map(([name, count]) => count > 1 ? `${name} (${count}x)` : name).join(', ')}
+                  </p>
+                )}
+                <div className="flex gap-3">
+                  <PickLine p={pick} pt={pts} label={entryB ? playerA : null} />
+                  {entryB && <PickLine p={entryB.pick} pt={entryB.pts} label={playerB} />}
+                </div>
+                {entryB && diff !== 0 && (
+                  <p className={`text-[10px] mt-1.5 font-semibold ${diff > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {diff > 0 ? `${playerA} ganhou +${diff} pts aqui` : `${playerB} ganhou +${-diff} pts aqui`}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
