@@ -547,6 +547,33 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
         <span className="flex-1 text-left font-black text-stone-100 text-base">{displayTeamB}</span>
       </div>
 
+      {(finished || isLive) && result?.scorerDetails?.length > 0 && (
+        <div className="px-4 pb-2 flex gap-2">
+          {/* Marcadores teamA (lado esquerdo) */}
+          <div className="flex-1 flex flex-col items-end gap-0.5">
+            {result.scorerDetails.filter(s => s.teamSide === 'A').map((s, i) => (
+              <p key={i} className="text-[11px] text-slate-400 text-right">
+                {s.ownGoal ? <span className="text-slate-500">(AG) </span> : null}
+                {s.name}{s.minute ? ` ${s.minute}` : ''}
+              </p>
+            ))}
+          </div>
+          <div className="w-px bg-slate-700 shrink-0" />
+          {/* Marcadores teamB (lado direito) */}
+          <div className="flex-1 flex flex-col items-start gap-0.5">
+            {result.scorerDetails.filter(s => s.teamSide === 'B').map((s, i) => (
+              <p key={i} className="text-[11px] text-slate-400">
+                {s.minute ? `${s.minute} ` : ''}{s.name}
+                {s.ownGoal ? <span className="text-slate-500"> (AG)</span> : null}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+      {(finished || isLive) && !result?.scorerDetails?.length && result?.scorers?.length > 0 && (
+        <p className="px-4 pb-2 text-[11px] text-slate-400">⚽ {result.scorers.join(', ')}</p>
+      )}
+
       <div className="border-t border-dashed border-slate-600 px-4 py-3">
         {!pickEditable && (
           <p className={`text-xs mb-2 ${finished ? 'text-slate-500' : 'text-rose-400'}`}>
@@ -715,10 +742,6 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
               </p>
             )}
           </BetLine>
-        )}
-
-        {result && result.scorers && result.scorers.length > 0 && (
-          <p className="text-xs text-slate-400">Marcaram: {result.scorers.join(', ')}</p>
         )}
       </div>
 
@@ -1533,13 +1556,22 @@ export default function App() {
     function scorersFromEspnEvent(ev) {
       const comp = ev.competitions?.[0];
       const details = comp?.details || [];
+      const homeId = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.id;
       return details
         .filter(d => {
           const t = (d.type?.text || d.type?.abbreviation || '').toLowerCase();
           return t.includes('goal') && !t.includes('disallowed') && !t.includes('missed');
         })
-        .map(d => d.athletesInvolved?.[0]?.displayName || '')
-        .filter(Boolean);
+        .map(d => ({
+          name: d.athletesInvolved?.[0]?.displayName || '',
+          minute: d.clock?.displayValue || null,
+          ownGoal: d.ownGoal === true,
+          // 'home' se o golo foi marcado pela equipa da casa (homeAway='home')
+          // Na app, 'home' = teamA (se não swapped) ou teamB (se swapped)
+          teamId: d.team?.id || null,
+          isHome: d.team?.id === homeId,
+        }))
+        .filter(s => s.name);
     }
 
     async function poll() {
@@ -1622,13 +1654,24 @@ export default function App() {
           // Marcadores: tenta ESPN primeiro (details[]) — só tem dados ao vivo.
           // Se vazio e houve golo ou o jogo acabou, chama API-Football (1 vez).
           const espnScorers = scorersFromEspnEvent(ev);
-          let scorers = espnScorers.length > 0 ? espnScorers : (existing.scorers || []);
 
-          if (espnScorers.length === 0 && (goalChanged || justFinished) && nowGoals > 0) {
+          // scorerDetails: lista rica com minuto, lado, auto-golo (para display)
+          // scorers: só nomes, excluindo auto-golos (para cálculo de pontos)
+          let scorerDetails = [];
+          let scorers = existing.scorers || [];
+
+          if (espnScorers.length > 0) {
+            // Ajusta isHome conforme swap (se swapped, isHome na ESPN = teamB na app)
+            scorerDetails = espnScorers.map(s => ({
+              ...s,
+              teamSide: swapped ? (s.isHome ? 'B' : 'A') : (s.isHome ? 'A' : 'B'),
+            }));
+            // Para pontos: só nomes não-autogolos
+            scorers = scorerDetails.filter(s => !s.ownGoal).map(s => s.name);
+          } else if (goalChanged || justFinished) {
             try {
               const apiKey = 'e8134025bc279c122c4863d841fc2edb';
               const apiBase = 'https://v3.football.api-sports.io';
-              // Guarda o fixture id para não re-procurar em cada poll
               let fid = existing._fixtureId;
               if (!fid) {
                 const r1 = await fetch(`${apiBase}/fixtures?date=${m.date}`, {
@@ -1652,16 +1695,26 @@ export default function App() {
                 const d2 = await r2.json();
                 const full = (d2.response || [])[0];
                 if (full) {
-                  const apiScorers = (full.events || [])
-                    .filter(ev => ev.type === 'Goal' && ev.detail !== 'Missed Penalty')
-                    .map(ev => ev.player?.name || '')
-                    .filter(Boolean);
-                  if (apiScorers.length > 0) scorers = apiScorers;
-                  // guarda fixture id para não buscar de novo
+                  const homeTeamId = full.teams?.home?.id;
+                  const apiEvents = (full.events || [])
+                    .filter(ev => ev.type === 'Goal' && ev.detail !== 'Missed Penalty');
+                  scorerDetails = apiEvents.map(ev => ({
+                    name: ev.player?.name || '',
+                    minute: ev.time?.elapsed ? `${ev.time.elapsed}'` : null,
+                    ownGoal: ev.detail === 'Own Goal',
+                    isHome: ev.team?.id === homeTeamId,
+                    teamSide: swapped
+                      ? (ev.team?.id === homeTeamId ? 'B' : 'A')
+                      : (ev.team?.id === homeTeamId ? 'A' : 'B'),
+                  })).filter(s => s.name);
+                  scorers = scorerDetails.filter(s => !s.ownGoal).map(s => s.name);
                   toSave[m.id] = { ...(toSave[m.id] || existing), _fixtureId: fid };
                 }
               }
             } catch (e) { /* segue sem marcadores se falhar */ }
+          } else {
+            // sem novidades — preserva o que já estava
+            scorerDetails = existing.scorerDetails || [];
           }
 
           const updated = {
@@ -1673,6 +1726,7 @@ export default function App() {
             halftime,
             minute,
             scorers,
+            scorerDetails: scorerDetails.length > 0 ? scorerDetails : (existing.scorerDetails || []),
           };
 
           const diff =
