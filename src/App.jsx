@@ -1548,7 +1548,7 @@ export default function App() {
       // Verifica se há jogos ao vivo ou a começar em breve (<15min)
       const hasActive = allM.some(m => {
         const ko = matchKickoffUTC(m);
-        return now >= ko - 15 * 60 * 1000 && now <= ko + 130 * 60 * 1000;
+        return now >= ko - 15 * 60 * 1000 && now <= ko + 150 * 60 * 1000;
       });
 
       if (!hasActive) {
@@ -1579,7 +1579,7 @@ export default function App() {
 
         for (const m of allM) {
           const ko = matchKickoffUTC(m);
-          if (now < ko - 15 * 60 * 1000 || now > ko + 130 * 60 * 1000) continue;
+          if (now < ko - 15 * 60 * 1000 || now > ko + 150 * 60 * 1000) continue;
 
           const a = TEAM_MAP[m.teamA] || (current[m.id]?.teamAName) || m.teamA;
           const b = TEAM_MAP[m.teamB] || (current[m.id]?.teamBName) || m.teamB;
