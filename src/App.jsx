@@ -1612,10 +1612,53 @@ export default function App() {
           const existing = toSave[m.id] || {};
           const prevGoals = (Number(existing.scoreA)||0) + (Number(existing.scoreB)||0);
           const nowGoals = (Number(scoreA)||0) + (Number(scoreB)||0);
+          const goalChanged = nowGoals !== prevGoals; // golo novo ou anulado
+          const justFinished = finished && (!existing.finished);
 
-          // Marcadores vêm directamente dos details[] da ESPN — nomes completos
+          // Marcadores: tenta ESPN primeiro (details[]) — só tem dados ao vivo.
+          // Se vazio e houve golo ou o jogo acabou, chama API-Football (1 vez).
           const espnScorers = scorersFromEspnEvent(ev);
-          const scorers = espnScorers.length > 0 ? espnScorers : (existing.scorers || []);
+          let scorers = espnScorers.length > 0 ? espnScorers : (existing.scorers || []);
+
+          if (espnScorers.length === 0 && (goalChanged || justFinished) && nowGoals > 0) {
+            try {
+              const apiKey = 'e8134025bc279c122c4863d841fc2edb';
+              const apiBase = 'https://v3.football.api-sports.io';
+              // Guarda o fixture id para não re-procurar em cada poll
+              let fid = existing._fixtureId;
+              if (!fid) {
+                const r1 = await fetch(`${apiBase}/fixtures?date=${m.date}`, {
+                  headers: { 'x-apisports-key': apiKey }
+                });
+                const d1 = await r1.json();
+                if (!d1.errors || Object.keys(d1.errors).length === 0) {
+                  const fixtures = (d1.response || []).filter(f => f.league?.id === 1);
+                  const found = fixtures.find(f => {
+                    const h = f.teams?.home?.name || '';
+                    const aw = f.teams?.away?.name || '';
+                    return (teamsMatch(a,h) && teamsMatch(b,aw)) || (teamsMatch(b,h) && teamsMatch(a,aw));
+                  });
+                  fid = found?.fixture?.id || null;
+                }
+              }
+              if (fid) {
+                const r2 = await fetch(`${apiBase}/fixtures?id=${fid}`, {
+                  headers: { 'x-apisports-key': apiKey }
+                });
+                const d2 = await r2.json();
+                const full = (d2.response || [])[0];
+                if (full) {
+                  const apiScorers = (full.events || [])
+                    .filter(ev => ev.type === 'Goal' && ev.detail !== 'Missed Penalty')
+                    .map(ev => ev.player?.name || '')
+                    .filter(Boolean);
+                  if (apiScorers.length > 0) scorers = apiScorers;
+                  // guarda fixture id para não buscar de novo
+                  toSave[m.id] = { ...(toSave[m.id] || existing), _fixtureId: fid };
+                }
+              }
+            } catch (e) { /* segue sem marcadores se falhar */ }
+          }
 
           const updated = {
             ...existing,
