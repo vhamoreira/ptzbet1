@@ -355,23 +355,12 @@ function liveStatusFor(pick, result) {
     else if (sA === pA && sB === pB) exact = 'winning';
   }
 
-  // Vencedor/empate: impossível se o resultado actual já torna inatingível o apostado
+  // Vencedor/empate: nunca pode ser 'losing' durante o jogo (pode sempre mudar)
+  // só mostramos 'winning' se o resultado actual já bate com o apostado
   let outcome = 'open';
   if (pick.outcome) {
     const curOutcome = outcomeOf(sA, sB);
-    if (pick.outcome === 'A') {
-      // apostou A: perde se B já tem mais golos e a diferença é irreversível
-      // não sabemos quantos golos faltam, por isso só marcamos losing se B>A e é matematicamente impossível
-      // simplificação: se o resultado atual é o oposto do apostado, está a perder
-      if (curOutcome === 'B') outcome = 'losing';
-      else if (curOutcome === 'A') outcome = 'winning';
-    } else if (pick.outcome === 'B') {
-      if (curOutcome === 'A') outcome = 'losing';
-      else if (curOutcome === 'B') outcome = 'winning';
-    } else { // empate
-      if (curOutcome !== 'D') outcome = 'losing';
-      else outcome = 'winning';
-    }
+    if (curOutcome === pick.outcome) outcome = 'winning';
   }
 
   // Marcador: winning se já marcou, open se ainda não marcou, losing nunca (pode marcar ainda)
