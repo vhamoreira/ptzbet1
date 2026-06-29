@@ -319,8 +319,19 @@ function pointsFor(pick, result) {
     Number(pick.scoreB) === Number(result.scoreB)
   ) exact = 5;
   if (pick.scorer && pick.scorer.trim() && result.scorers && result.scorers.length) {
-    const target = pick.scorer.trim().toLowerCase();
-    scorer = result.scorers.filter((s) => s.trim().toLowerCase() === target).length;
+    const normStr = (s) => s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const target = normStr(pick.scorer);
+    scorer = result.scorers.filter((s) => {
+      const n = normStr(s);
+      if (n === target) return true;
+      // apelido igual (última palavra)
+      const lastA = target.split(' ').pop();
+      const lastB = n.split(' ').pop();
+      if (lastA && lastA.length > 2 && lastA === lastB) return true;
+      // um contém o outro (ex: "Vinícius" em "Vinícius Júnior")
+      if (n.includes(target) || target.includes(n)) return true;
+      return false;
+    }).length;
   }
   if (pick.qualifier && result.qualifier && pick.qualifier === result.qualifier) qualify = 2;
   return { scorer, outcome, exact, qualify, total: scorer + outcome + exact + qualify };
