@@ -363,7 +363,8 @@ function liveStatusFor(pick, result) {
     if (curOutcome === pick.outcome) outcome = 'winning';
   }
 
-  // Marcador: winning se já marcou, open se ainda não marcou, losing nunca (pode marcar ainda)
+  // Marcador: verde se já marcou, cinza caso contrário (nunca vermelho — pode
+  // ainda marcar a qualquer momento, incluindo após entrar como suplente)
   let scorer = 'open';
   if (pick.scorer && result.scorers && result.scorers.length) {
     const target = normStr(pick.scorer);
@@ -379,7 +380,10 @@ function liveStatusFor(pick, result) {
     if (found) scorer = 'winning';
   }
 
-  return { exact, outcome, scorer };
+  // A qualificar: só se sabe no fim — nunca vermelho ao vivo
+  const qualify = 'open';
+
+  return { exact, outcome, scorer, qualify };
 }
 
 // Hora de início do jogo, em UTC (as horas guardadas em RAW_MATCHES/RAW_KNOCKOUT
