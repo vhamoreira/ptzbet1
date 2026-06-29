@@ -1377,11 +1377,15 @@ export default function App() {
   }, [stage, myName, loadShared, loadMyPicks, loadAllPicks]);
 
   // Ao abrir a app, vai buscar marcadores em falta à ESPN para todos
-  // os jogos terminados — usa displayName (nomes completos) que fazem match
-  // com os palpites dos utilizadores.
+  // os jogos terminados com golos mas sem marcadores guardados.
+  // Usa localStorage para não repetir mais de uma vez por hora.
   useEffect(() => {
     if (stage !== 'app') return;
     (async () => {
+      // Throttle: não corre se já correu na última hora
+      const lastRun = localStorage.getItem('espn_scorers_sync');
+      if (lastRun && Date.now() - Number(lastRun) < 60 * 60 * 1000) return;
+
       const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world';
       const stop = new Set(['do','da','de','e','and','of','the']);
       const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -1416,18 +1420,17 @@ export default function App() {
         current = r && r.value ? JSON.parse(r.value) : {};
       } catch (e) { return; }
 
-      // Jogos terminados com golos mas sem marcadores (ou com nomes abreviados
-      // — força atualização para jogos de 27 junho em diante)
-      const FORCE_FROM = '2026-06-27';
+      // Apenas jogos terminados com golos mas sem marcadores
       const allM = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
       const needScorers = allM.filter(m => {
         const r = current[m.id];
         if (!r || !r.finished) return false;
         const goals = (Number(r.scoreA)||0) + (Number(r.scoreB)||0);
-        if (goals === 0) return false;
-        if (m.date >= FORCE_FROM) return true;
-        return !r.scorers || r.scorers.length === 0;
+        return goals > 0 && (!r.scorers || r.scorers.length === 0);
       });
+
+      // Marca o timestamp mesmo que não haja nada a fazer
+      localStorage.setItem('espn_scorers_sync', String(Date.now()));
 
       if (needScorers.length === 0) return;
 
