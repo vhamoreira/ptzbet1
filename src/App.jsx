@@ -796,15 +796,19 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
       </div>
 
       <div className="border-t border-slate-700">
-        <button
-          onClick={() => setOthersOpen((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-2 text-xs font-bold text-slate-400"
-        >
-          Palpites da galera ({otherPicks.length})
-          {othersOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-        {othersOpen && (
-          <div className="px-4 pb-3 flex flex-col gap-1.5">
+        {!hasKickedOff ? (
+          <p className="px-4 py-2 text-xs text-slate-600 text-center">🔒 Palpites revelados quando o jogo começar</p>
+        ) : (
+          <>
+            <button
+              onClick={() => setOthersOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-2 text-xs font-bold text-slate-400"
+            >
+              Palpites da galera ({otherPicks.length})
+              {othersOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {othersOpen && (
+              <div className="px-4 pb-3 flex flex-col gap-1.5">
             {otherPicks.length === 0 && (
               <p className="text-xs text-slate-500">Ainda ninguém palpitou este jogo.</p>
             )}
@@ -834,6 +838,8 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
               );
             })}
           </div>
+        )}
+          </>
         )}
       </div>
 
