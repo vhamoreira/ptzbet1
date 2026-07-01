@@ -1638,10 +1638,21 @@ export default function App() {
       const allM = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
       const now = Date.now();
 
-      // Verifica se há jogos ao vivo ou a começar em breve (<15min)
+      // Verifica se há jogos ao vivo ou a começar em breve (<15min).
+      // Janela de 200min cobre 90min regulares + 30min prorrogação + penáltis + buffer.
+      // Também inclui qualquer jogo ainda marcado como live no Supabase (para não
+      // ficar preso se o prolongamento ultrapassar a janela de tempo).
+      let current = {};
+      try {
+        const s = await storage.get('results', true);
+        current = s && s.value ? JSON.parse(s.value) : {};
+      } catch (e) {}
+
       const hasActive = allM.some(m => {
         const ko = matchKickoffUTC(m);
-        return now >= ko - 15 * 60 * 1000 && now <= ko + 150 * 60 * 1000;
+        const inWindow = now >= ko - 15 * 60 * 1000 && now <= ko + 200 * 60 * 1000;
+        const stillLive = current[m.id]?.live === true;
+        return inWindow || stillLive;
       });
 
       if (!hasActive) {
@@ -1661,18 +1672,14 @@ export default function App() {
         const data = await r.json();
         const events = data.events || [];
 
-        let current = {};
-        try {
-          const s = await storage.get('results', true);
-          current = s && s.value ? JSON.parse(s.value) : {};
-        } catch (e) {}
-
         let changed = false;
         const toSave = { ...current };
 
         for (const m of allM) {
           const ko = matchKickoffUTC(m);
-          if (now < ko - 15 * 60 * 1000 || now > ko + 150 * 60 * 1000) continue;
+          const inWindow = now >= ko - 15 * 60 * 1000 && now <= ko + 200 * 60 * 1000;
+          const stillLive = current[m.id]?.live === true;
+          if (!inWindow && !stillLive) continue;
 
           const rawA = TEAM_MAP[m.teamA] ? m.teamA : (current[m.id]?.teamAName || m.teamA);
           const rawB = TEAM_MAP[m.teamB] ? m.teamB : (current[m.id]?.teamBName || m.teamB);
