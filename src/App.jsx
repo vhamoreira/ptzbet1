@@ -520,9 +520,17 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
     const b = next.scoreB !== '' && next.scoreB !== undefined ? Number(next.scoreB) : null;
     if (a !== null && b !== null && !isNaN(a) && !isNaN(b)) {
       next.outcome = a > b ? 'A' : a < b ? 'B' : 'D';
-      // Em jogos eliminatórios, inferir também quem se qualifica (empate = indefinido, alguém passa nos penaltis)
-      if (isKnockout && a !== b) {
-        next.qualifier = a > b ? 'A' : 'B';
+      // Em jogos eliminatórios, infere o qualifier a partir do placar — mas só
+      // quando o resultado não é empate (empate = vai a prolongamento, o qualifier
+      // tem de ser escolhido manualmente). Se o utilizador já escolheu explicitamente
+      // um qualifier diferente do inferido, respeita a escolha manual.
+      if (isKnockout) {
+        if (a !== b) {
+          next.qualifier = a > b ? 'A' : 'B';
+        } else if (partial.qualifier === undefined) {
+          // empate e não está a mudar o qualifier — preserva o que está
+          next.qualifier = next.qualifier || '';
+        }
       }
     }
     setDraftPick(next);
