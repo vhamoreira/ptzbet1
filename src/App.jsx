@@ -624,6 +624,12 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
         <p className="px-4 pb-2 text-[11px] text-slate-400">⚽ {result.scorers.join(', ')}</p>
       )}
 
+      {finished && isKnockout && result?.qualifier && (
+        <p className="px-4 pb-2 text-xs font-bold text-teal-400">
+          ✅ Qualificado: {result.qualifier === 'A' ? displayTeamA : displayTeamB}
+        </p>
+      )}
+
       <div className="border-t border-dashed border-slate-600 px-4 py-3">
         {!pickEditable && (
           <p className={`text-xs mb-2 ${finished ? 'text-slate-500' : 'text-rose-400'}`}>
@@ -1727,6 +1733,20 @@ export default function App() {
           const minuteNum = status.elapsed ?? null;
           const minute = halftime ? null : (minuteNum != null ? String(minuteNum) : null);
 
+          // Qualifier: quem avançou (só relevante em jogos eliminatórios).
+          // A ESPN marca o competidor vencedor com winner: true quando o jogo termina.
+          let qualifier = existing.qualifier || '';
+          if (finished && !qualifier) {
+            const winnerComp = comp?.competitors?.find(c => c.winner === true);
+            if (winnerComp) {
+              const isWinnerHome = winnerComp.homeAway === 'home';
+              // Se swapped, home na ESPN = teamB na app
+              qualifier = swapped
+                ? (isWinnerHome ? 'B' : 'A')
+                : (isWinnerHome ? 'A' : 'B');
+            }
+          }
+
           const existing = toSave[m.id] || {};
           const prevGoals = (Number(existing.scoreA)||0) + (Number(existing.scoreB)||0);
           const nowGoals = (Number(scoreA)||0) + (Number(scoreB)||0);
@@ -1809,6 +1829,7 @@ export default function App() {
             minute,
             scorers,
             scorerDetails: scorerDetails.length > 0 ? scorerDetails : (existing.scorerDetails || []),
+            qualifier,
           };
 
           const diff =
@@ -1818,6 +1839,7 @@ export default function App() {
             updated.finished !== existing.finished ||
             updated.halftime !== existing.halftime ||
             updated.minute !== existing.minute ||
+            updated.qualifier !== existing.qualifier ||
             JSON.stringify(updated.scorers) !== JSON.stringify(existing.scorers);
 
           if (diff) { toSave[m.id] = updated; changed = true; }
