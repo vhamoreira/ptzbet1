@@ -797,7 +797,17 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
 
       <div className="border-t border-slate-700">
         {!hasKickedOff ? (
-          <p className="px-4 py-2 text-xs text-slate-600 text-center">🔒 Palpites revelados quando o jogo começar</p>
+          <div className="px-4 py-2">
+            <p className="text-xs text-slate-500 mb-1">
+              🔒 Palpites revelados quando o jogo começar
+              {otherPicks.length > 0 && ` · ${otherPicks.length} palpite${otherPicks.length > 1 ? 's' : ''} dado${otherPicks.length > 1 ? 's' : ''}`}
+            </p>
+            {otherPicks.length > 0 && (
+              <p className="text-xs text-slate-600">
+                {otherPicks.map(({ name }) => name).join(', ')}
+              </p>
+            )}
+          </div>
         ) : (
           <>
             <button
