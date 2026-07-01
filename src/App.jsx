@@ -1071,6 +1071,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                             scoreA: p.scoreA ?? '',
                             scoreB: p.scoreB ?? '',
                             scorer: p.scorer || '',
+                            qualifier: p.qualifier || '',
                           });
                           setAdminScorerOther(!!p.scorer && !squadOptions.includes(p.scorer));
                         } else {
