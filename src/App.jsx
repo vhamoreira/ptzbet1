@@ -1700,32 +1700,10 @@ export default function App() {
       } catch (e) {}
 
       try {
-        // A ESPN com dates=YYYYMMDD ignora o parâmetro e devolve fase de grupos.
-        // O range curto (ontem-amanhã) funciona correctamente para jogos ao vivo.
-        const now2 = new Date();
-        const fmt = (d) => String(d.getUTCFullYear()) +
-          String(d.getUTCMonth()+1).padStart(2,'0') +
-          String(d.getUTCDate()).padStart(2,'0');
-        const yesterday = new Date(now2.getTime() - 24*60*60*1000);
-        const tomorrow = new Date(now2.getTime() + 24*60*60*1000);
-        const dateRange = `${fmt(yesterday)}-${fmt(tomorrow)}`;
-
-        const r = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=${dateRange}`);
+        const r = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=20260611-20260719`);
         if (!r.ok || cancelled) { timeoutId = setTimeout(poll, 30000); return; }
         const data = await r.json();
-        let events = data.events || [];
-        // Também busca o range completo do torneio para histórico (marcadores antigos)
-        try {
-          const r2 = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=20260611-20260719`);
-          if (r2.ok) {
-            const d2 = await r2.json();
-            const histEvents = d2.events || [];
-            const existingIds = new Set(events.map(e => e.id));
-            for (const ev of histEvents) {
-              if (!existingIds.has(ev.id)) events.push(ev);
-            }
-          }
-        } catch (e) {}
+        const events = data.events || [];
 
         let changed = false;
         const toSave = { ...current };
