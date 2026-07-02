@@ -310,7 +310,14 @@ function pointsFor(pick, result) {
   let outcome = 0;
   let exact = 0;
   let qualify = 0;
-  const actual = outcomeOf(result.scoreA, result.scoreB);
+
+  // Para o VED, usa o placar dos 90 minutos se disponível (jogos com prorrogação).
+  // O resultado exato usa sempre o placar final.
+  const vedA = (result.scoreA90 !== '' && result.scoreA90 !== undefined && result.scoreA90 !== null)
+    ? result.scoreA90 : result.scoreA;
+  const vedB = (result.scoreB90 !== '' && result.scoreB90 !== undefined && result.scoreB90 !== null)
+    ? result.scoreB90 : result.scoreB;
+  const actual = outcomeOf(vedA, vedB);
   if (pick.outcome === actual) outcome = 3;
   if (
     pick.scoreA !== '' && pick.scoreA !== undefined &&
@@ -468,7 +475,7 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
   const [adminOpen, setAdminOpen] = useState(false);
   const [othersOpen, setOthersOpen] = useState(false);
   const [draftResult, setDraftResult] = useState(
-    result || { scoreA: '', scoreB: '', scorers: [], live: false, finished: false, teamAName: '', teamBName: '', qualifier: '' }
+    result || { scoreA: '', scoreB: '', scoreA90: '', scoreB90: '', scorers: [], live: false, finished: false, teamAName: '', teamBName: '', qualifier: '' }
   );
   const squadOptions = useMemo(
     () => [...(SQUADS[displayTeamA] || []), ...(SQUADS[displayTeamB] || [])],
@@ -546,6 +553,8 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
     const payload = {
       scoreA: extra.scoreA !== undefined ? extra.scoreA : draftResult.scoreA,
       scoreB: extra.scoreB !== undefined ? extra.scoreB : draftResult.scoreB,
+      scoreA90: extra.scoreA90 !== undefined ? extra.scoreA90 : draftResult.scoreA90 ?? '',
+      scoreB90: extra.scoreB90 !== undefined ? extra.scoreB90 : draftResult.scoreB90 ?? '',
       scorers: extra.scorers !== undefined ? extra.scorers : draftResult.scorers || [],
       live: extra.live !== undefined ? extra.live : draftResult.live,
       finished: extra.finished !== undefined ? extra.finished : draftResult.finished,
@@ -912,7 +921,30 @@ function MatchCard({ match, pick, result, isAdmin, myName, onSavePick, onSaveRes
                   onChange={(e) => setDraftResult((d) => ({ ...d, scoreB: e.target.value }))}
                   className="w-14 text-center rounded-md bg-slate-800 border border-slate-700 text-stone-100 py-1"
                 />
+                <span className="text-xs text-slate-500">placar final</span>
               </div>
+              {isKnockout && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="—"
+                    value={draftResult.scoreA90 ?? ''}
+                    onChange={(e) => setDraftResult((d) => ({ ...d, scoreA90: e.target.value }))}
+                    className="w-14 text-center rounded-md bg-slate-800 border border-slate-600 text-stone-100 py-1"
+                  />
+                  <span className="text-slate-500">-</span>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="—"
+                    value={draftResult.scoreB90 ?? ''}
+                    onChange={(e) => setDraftResult((d) => ({ ...d, scoreB90: e.target.value }))}
+                    className="w-14 text-center rounded-md bg-slate-800 border border-slate-600 text-stone-100 py-1"
+                  />
+                  <span className="text-xs text-slate-500">90 min (V/E/D)</span>
+                </div>
+              )}
 
               {(draftResult.scorers || []).length > 0 && (
                 <div className="flex flex-wrap gap-1">
