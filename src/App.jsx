@@ -1703,7 +1703,21 @@ export default function App() {
         const r = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=20260611-20260719`);
         if (!r.ok || cancelled) { timeoutId = setTimeout(poll, 30000); return; }
         const data = await r.json();
-        const events = data.events || [];
+        // Combina eventos do scoreboard geral (histórico) com os de hoje (ao vivo)
+        // A ESPN às vezes não inclui jogos ao vivo no range longo de datas
+        let events = data.events || [];
+        try {
+          const r2 = await fetch(`${ESPN_BASE}/scoreboard?limit=50`);
+          if (r2.ok) {
+            const d2 = await r2.json();
+            const todayEvents = d2.events || [];
+            // Merge: adiciona eventos de hoje que não estejam já na lista
+            const existingIds = new Set(events.map(e => e.id));
+            for (const ev of todayEvents) {
+              if (!existingIds.has(ev.id)) events.push(ev);
+            }
+          }
+        } catch (e) {}
 
         let changed = false;
         const toSave = { ...current };
