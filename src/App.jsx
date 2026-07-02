@@ -1666,13 +1666,6 @@ export default function App() {
       'RD Congo':'DR Congo','Austrália':'Australia','Turquia':'Turkey','Paraguai':'Paraguay',
     };
 
-    function matchKickoffUTC(match) {
-      const [h, min] = (match.time || '00:00').split(':').map(Number);
-      const d = new Date(`${match.date}T00:00:00Z`);
-      d.setUTCHours(h - 1, min, 0, 0); // Lisboa UTC+1 -> UTC
-      return d.getTime();
-    }
-
     // Extrai marcadores directamente do evento ESPN — usa displayName (nome
     // completo) em vez dos nomes abreviados que a API-Football devolvia.
     function scorersFromEspnEvent(ev) {
@@ -1699,37 +1692,12 @@ export default function App() {
     async function poll() {
       if (cancelled) return;
       const allM = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
-      const now = Date.now();
 
-      // Verifica se há jogos ao vivo ou a começar em breve (<15min).
-      // Janela de 200min cobre 90min regulares + 30min prorrogação + penáltis + buffer.
-      // Também inclui qualquer jogo ainda marcado como live no Supabase (para não
-      // ficar preso se o prolongamento ultrapassar a janela de tempo).
       let current = {};
       try {
         const s = await storage.get('results', true);
         current = s && s.value ? JSON.parse(s.value) : {};
       } catch (e) {}
-
-      const hasActive = allM.some(m => {
-        const ko = matchKickoffUTC(m);
-        const inWindow = now >= ko - 15 * 60 * 1000 && now <= ko + 240 * 60 * 1000;
-        const stillLive = current[m.id]?.live === true;
-        // Também inclui jogos que já deviam ter começado mas não têm resultado nenhum
-        const startedNoResult = now >= ko && now <= ko + 240 * 60 * 1000 && !current[m.id]?.finished;
-        return inWindow || stillLive || startedNoResult;
-      });
-
-      if (!hasActive) {
-        // Nenhum jogo activo — acorda 10min antes do próximo
-        const nextKo = allM
-          .map(m => matchKickoffUTC(m))
-          .filter(t => t > now)
-          .sort((a,b) => a - b)[0];
-        const delay = nextKo ? Math.max(0, nextKo - now - 10 * 60 * 1000) : 3 * 60 * 60 * 1000;
-        if (!cancelled) timeoutId = setTimeout(poll, delay);
-        return;
-      }
 
       try {
         const r = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=20260611-20260719`);
@@ -1741,11 +1709,6 @@ export default function App() {
         const toSave = { ...current };
 
         for (const m of allM) {
-          const ko = matchKickoffUTC(m);
-          const inWindow = now >= ko - 15 * 60 * 1000 && now <= ko + 240 * 60 * 1000;
-          const stillLive = current[m.id]?.live === true;
-          const startedNoResult = now >= ko && now <= ko + 240 * 60 * 1000 && !current[m.id]?.finished;
-          if (!inWindow && !stillLive && !startedNoResult) continue;
 
           const rawA = TEAM_MAP[m.teamA] ? m.teamA : (current[m.id]?.teamAName || m.teamA);
           const rawB = TEAM_MAP[m.teamB] ? m.teamB : (current[m.id]?.teamBName || m.teamB);
