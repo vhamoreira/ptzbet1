@@ -1681,9 +1681,11 @@ export default function App() {
 
       const hasActive = allM.some(m => {
         const ko = matchKickoffUTC(m);
-        const inWindow = now >= ko - 15 * 60 * 1000 && now <= ko + 200 * 60 * 1000;
+        const inWindow = now >= ko - 15 * 60 * 1000 && now <= ko + 240 * 60 * 1000;
         const stillLive = current[m.id]?.live === true;
-        return inWindow || stillLive;
+        // Também inclui jogos que já deviam ter começado mas não têm resultado nenhum
+        const startedNoResult = now >= ko && now <= ko + 240 * 60 * 1000 && !current[m.id]?.finished;
+        return inWindow || stillLive || startedNoResult;
       });
 
       if (!hasActive) {
@@ -1708,9 +1710,10 @@ export default function App() {
 
         for (const m of allM) {
           const ko = matchKickoffUTC(m);
-          const inWindow = now >= ko - 15 * 60 * 1000 && now <= ko + 200 * 60 * 1000;
+          const inWindow = now >= ko - 15 * 60 * 1000 && now <= ko + 240 * 60 * 1000;
           const stillLive = current[m.id]?.live === true;
-          if (!inWindow && !stillLive) continue;
+          const startedNoResult = now >= ko && now <= ko + 240 * 60 * 1000 && !current[m.id]?.finished;
+          if (!inWindow && !stillLive && !startedNoResult) continue;
 
           const rawA = TEAM_MAP[m.teamA] ? m.teamA : (current[m.id]?.teamAName || m.teamA);
           const rawB = TEAM_MAP[m.teamB] ? m.teamB : (current[m.id]?.teamBName || m.teamB);
