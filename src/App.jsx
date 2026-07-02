@@ -1703,18 +1703,26 @@ export default function App() {
         const r = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=20260611-20260719`);
         if (!r.ok || cancelled) { timeoutId = setTimeout(poll, 30000); return; }
         const data = await r.json();
-        // Combina eventos do scoreboard geral (histórico) com os de hoje (ao vivo)
-        // A ESPN às vezes não inclui jogos ao vivo no range longo de datas
         let events = data.events || [];
+        // Busca também os jogos de hoje com a data exacta — o scoreboard sem
+        // datas devolve uma data interna da ESPN que pode não ser hoje.
         try {
-          const r2 = await fetch(`${ESPN_BASE}/scoreboard?limit=50`);
+          const today = new Date();
+          const dd = String(today.getUTCFullYear()) +
+            String(today.getUTCMonth() + 1).padStart(2,'0') +
+            String(today.getUTCDate()).padStart(2,'0');
+          const r2 = await fetch(`${ESPN_BASE}/scoreboard?limit=50&dates=${dd}`);
           if (r2.ok) {
             const d2 = await r2.json();
             const todayEvents = d2.events || [];
-            // Merge: adiciona eventos de hoje que não estejam já na lista
             const existingIds = new Set(events.map(e => e.id));
             for (const ev of todayEvents) {
               if (!existingIds.has(ev.id)) events.push(ev);
+              else {
+                // Substitui o evento do range longo pelo de hoje (mais actualizado)
+                const idx = events.findIndex(e => e.id === ev.id);
+                if (idx !== -1) events[idx] = ev;
+              }
             }
           }
         } catch (e) {}
