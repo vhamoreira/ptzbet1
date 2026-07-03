@@ -1700,10 +1700,39 @@ export default function App() {
       } catch (e) {}
 
       try {
-        const r = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=20260611-20260719`);
+        // football-data.org cobre TODAS as fases (grupos + eliminatórias).
+        // A ESPN scoreboard ficou bloqueada na fase de grupos após 27 junho.
+        const FD_KEY = '1e7d1e2fc17546e79d9930a216f0a621';
+        const now3 = new Date();
+        const ymd3 = (d) => d.toISOString().split('T')[0];
+        const yesterday3 = new Date(now3.getTime() - 24*60*60*1000);
+        const tomorrow3 = new Date(now3.getTime() + 24*60*60*1000);
+
+        const r = await fetch(
+          `https://api.football-data.org/v4/competitions/WC/matches?dateFrom=${ymd3(yesterday3)}&dateTo=${ymd3(tomorrow3)}`,
+          { headers: { 'X-Auth-Token': FD_KEY } }
+        );
         if (!r.ok || cancelled) { timeoutId = setTimeout(poll, 30000); return; }
+        if (r.status === 429) { timeoutId = setTimeout(poll, 90000); return; }
         const data = await r.json();
-        const events = data.events || [];
+        const fdMatches = data.matches || [];
+
+        // ESPN ainda usada para marcadores (details[]) quando disponíveis
+        let espnEvents = [];
+        try {
+          const er = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=20260611-20260719`);
+          if (er.ok) { const ed = await er.json(); espnEvents = ed.events || []; }
+        } catch (e) {}
+
+        // helpers para matching football-data.org (nomes em inglês)
+        const fdNorm = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+        const fdWords = (s) => fdNorm(s).split(/\s+/).filter(w => w && !new Set(['do','da','de','e','and','of','the']).has(w));
+        const fdTeamMatch = (a, b) => {
+          if (fdNorm(a) === fdNorm(b)) return true;
+          const wa = fdWords(a), wb = fdWords(b);
+          const [sh, lo] = wa.length <= wb.length ? [wa,wb] : [wb,wa];
+          return sh.every(w => lo.some(w2 => w2===w || w2.includes(w) || w.includes(w2)));
+        };
 
         let changed = false;
         const toSave = { ...current };
@@ -1714,55 +1743,63 @@ export default function App() {
           const rawB = TEAM_MAP[m.teamB] ? m.teamB : (current[m.id]?.teamBName || m.teamB);
           const a = TEAM_MAP[rawA] || rawA;
           const b = TEAM_MAP[rawB] || rawB;
-          const ev = events.find(e => {
+
+          // Procura o jogo na football-data.org
+          const fdGame = fdMatches.find(f => {
+            const h = f.homeTeam?.name || f.homeTeam?.shortName || '';
+            const aw = f.awayTeam?.name || f.awayTeam?.shortName || '';
+            return (fdTeamMatch(a,h) && fdTeamMatch(b,aw)) || (fdTeamMatch(b,h) && fdTeamMatch(a,aw));
+          });
+          if (!fdGame) continue;
+
+          const swappedFd = fdTeamMatch(b, fdGame.homeTeam?.name || '');
+          const fdScoreA = swappedFd ? fdGame.score?.fullTime?.away : fdGame.score?.fullTime?.home;
+          const fdScoreB = swappedFd ? fdGame.score?.fullTime?.home : fdGame.score?.fullTime?.away;
+          const scoreA = fdScoreA != null ? String(fdScoreA) : '';
+          const scoreB = fdScoreB != null ? String(fdScoreB) : '';
+
+          const fdStatus = fdGame.status;
+          const live = fdStatus === 'IN_PLAY' || fdStatus === 'PAUSED';
+          const finished = fdStatus === 'FINISHED' || fdStatus === 'AWARDED';
+          const minuteNum = fdGame.minute ?? null;
+          const halftime = fdStatus === 'PAUSED' && minuteNum != null && minuteNum >= 40 && minuteNum <= 50;
+          const minute = halftime ? null : (minuteNum != null ? String(minuteNum) : null);
+
+          // qualifier via ESPN se disponível
+          const existing = toSave[m.id] || {};
+          let qualifier = existing.qualifier || '';
+          if (finished && !qualifier) {
+            const espnEv = espnEvents.find(e => {
+              const comp = e.competitions?.[0];
+              const home = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '';
+              const away = comp?.competitors?.find(c => c.homeAway === 'away')?.team?.displayName || '';
+              return (teamsMatch(a,home) && teamsMatch(b,away)) || (teamsMatch(b,home) && teamsMatch(a,away));
+            });
+            if (espnEv) {
+              const espnComp = espnEv.competitions?.[0];
+              const winnerComp = espnComp?.competitors?.find(c => c.winner === true);
+              if (winnerComp) {
+                const isHome = winnerComp.homeAway === 'home';
+                const espnSwapped = teamsMatch(b, espnComp?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '');
+                qualifier = espnSwapped ? (isHome ? 'B' : 'A') : (isHome ? 'A' : 'B');
+              }
+            }
+          }
+
+          const prevGoals = (Number(existing.scoreA)||0) + (Number(existing.scoreB)||0);
+          const nowGoals = (Number(scoreA)||0) + (Number(scoreB)||0);
+          const goalChanged = nowGoals !== prevGoals;
+          const justFinished = finished && (!existing.finished);
+
+          // marcadores via ESPN (details[]) se disponível, senão API-Football
+          const espnEv2 = espnEvents.find(e => {
             const comp = e.competitions?.[0];
             const home = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '';
             const away = comp?.competitors?.find(c => c.homeAway === 'away')?.team?.displayName || '';
             return (teamsMatch(a,home) && teamsMatch(b,away)) || (teamsMatch(b,home) && teamsMatch(a,away));
           });
-          if (!ev) continue;
-
-          const comp = ev.competitions?.[0];
-          const status = comp?.status || {};
-          const state = status.type?.state;
-          const statusName = (status.type?.name || '').toUpperCase();
-          const homeComp = comp?.competitors?.find(c => c.homeAway === 'home');
-          const awayComp = comp?.competitors?.find(c => c.homeAway === 'away');
-
-          // Garante que homeComp corresponde a teamA
-          const swapped = teamsMatch(b, homeComp?.team?.displayName || '');
-          const scoreA = swapped ? awayComp?.score : homeComp?.score;
-          const scoreB = swapped ? homeComp?.score : awayComp?.score;
-
-          const live = state === 'in';
-          const finished = state === 'post';
-          const halftime = statusName === 'STATUS_HALFTIME';
-          const minuteNum = status.elapsed ?? null;
-          const minute = halftime ? null : (minuteNum != null ? String(minuteNum) : null);
-
-          // Qualifier: quem avançou (só relevante em jogos eliminatórios).
-          // A ESPN marca o competidor vencedor com winner: true quando o jogo termina.
-          let qualifier = existing.qualifier || '';
-          if (finished && !qualifier) {
-            const winnerComp = comp?.competitors?.find(c => c.winner === true);
-            if (winnerComp) {
-              const isWinnerHome = winnerComp.homeAway === 'home';
-              // Se swapped, home na ESPN = teamB na app
-              qualifier = swapped
-                ? (isWinnerHome ? 'B' : 'A')
-                : (isWinnerHome ? 'A' : 'B');
-            }
-          }
-
-          const existing = toSave[m.id] || {};
-          const prevGoals = (Number(existing.scoreA)||0) + (Number(existing.scoreB)||0);
-          const nowGoals = (Number(scoreA)||0) + (Number(scoreB)||0);
-          const goalChanged = nowGoals !== prevGoals; // golo novo ou anulado
-          const justFinished = finished && (!existing.finished);
-
-          // Marcadores: tenta ESPN primeiro (details[]) — só tem dados ao vivo.
-          // Se vazio e houve golo ou o jogo acabou, chama API-Football (1 vez).
-          const espnScorers = scorersFromEspnEvent(ev);
+          const espnSwapped2 = espnEv2 ? teamsMatch(b, espnEv2.competitions?.[0]?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '') : false;
+          const espnScorers = espnEv2 ? scorersFromEspnEvent(espnEv2) : [];
 
           // scorerDetails: lista rica com minuto, lado, auto-golo (para display)
           // scorers: só nomes, excluindo auto-golos (para cálculo de pontos)
@@ -1770,12 +1807,10 @@ export default function App() {
           let scorers = existing.scorers || [];
 
           if (espnScorers.length > 0) {
-            // Ajusta isHome conforme swap (se swapped, isHome na ESPN = teamB na app)
             scorerDetails = espnScorers.map(s => ({
               ...s,
-              teamSide: swapped ? (s.isHome ? 'B' : 'A') : (s.isHome ? 'A' : 'B'),
+              teamSide: espnSwapped2 ? (s.isHome ? 'B' : 'A') : (s.isHome ? 'A' : 'B'),
             }));
-            // Para pontos: só nomes não-autogolos
             scorers = scorerDetails.filter(s => !s.ownGoal).map(s => s.name);
           } else if (goalChanged || justFinished) {
             try {
@@ -1806,23 +1841,22 @@ export default function App() {
                 if (full) {
                   const homeTeamId = full.teams?.home?.id;
                   const apiEvents = (full.events || [])
-                    .filter(ev => ev.type === 'Goal' && ev.detail !== 'Missed Penalty');
-                  scorerDetails = apiEvents.map(ev => ({
-                    name: ev.player?.name || '',
-                    minute: ev.time?.elapsed ? `${ev.time.elapsed}'` : null,
-                    ownGoal: ev.detail === 'Own Goal',
-                    isHome: ev.team?.id === homeTeamId,
-                    teamSide: swapped
-                      ? (ev.team?.id === homeTeamId ? 'B' : 'A')
-                      : (ev.team?.id === homeTeamId ? 'A' : 'B'),
+                    .filter(ev2 => ev2.type === 'Goal' && ev2.detail !== 'Missed Penalty');
+                  scorerDetails = apiEvents.map(ev2 => ({
+                    name: ev2.player?.name || '',
+                    minute: ev2.time?.elapsed ? `${ev2.time.elapsed}'` : null,
+                    ownGoal: ev2.detail === 'Own Goal',
+                    isHome: ev2.team?.id === homeTeamId,
+                    teamSide: swappedFd
+                      ? (ev2.team?.id === homeTeamId ? 'B' : 'A')
+                      : (ev2.team?.id === homeTeamId ? 'A' : 'B'),
                   })).filter(s => s.name);
                   scorers = scorerDetails.filter(s => !s.ownGoal).map(s => s.name);
                   toSave[m.id] = { ...(toSave[m.id] || existing), _fixtureId: fid };
                 }
               }
-            } catch (e) { /* segue sem marcadores se falhar */ }
+            } catch (e) { /* segue sem marcadores */ }
           } else {
-            // sem novidades — preserva o que já estava
             scorerDetails = existing.scorerDetails || [];
           }
 
