@@ -189,8 +189,8 @@ const RAW_KNOCKOUT = [
   ['Ronda de 32', 86, '2026-07-03', '23:00', '1º Grupo J', '2º Grupo H'],
   ['Ronda de 32', 87, '2026-07-04', '02:30', '1º Grupo K', '3º (D/E/I/J/L)'],
 
-  ['Oitavos de Final', 90, '2026-07-04', '18:00', 'Vencedor J73', 'Vencedor J75'],
-  ['Oitavos de Final', 89, '2026-07-04', '22:00', 'Vencedor J74', 'Vencedor J77'],
+  ['Oitavos de Final', 89, '2026-07-04', '18:00', 'Vencedor J73', 'Vencedor J75'],
+  ['Oitavos de Final', 90, '2026-07-04', '22:00', 'Vencedor J74', 'Vencedor J77'],
   ['Oitavos de Final', 91, '2026-07-05', '21:00', 'Vencedor J76', 'Vencedor J78'],
   ['Oitavos de Final', 92, '2026-07-06', '01:00', 'Vencedor J79', 'Vencedor J80'],
   ['Oitavos de Final', 93, '2026-07-06', '20:00', 'Vencedor J83', 'Vencedor J84'],
