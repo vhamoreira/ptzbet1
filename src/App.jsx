@@ -2125,8 +2125,11 @@ export default function App() {
           // Recolhe os especiais de todos os jogadores
           const allSpecials = allPicks.map(p => ({ name: p.name, specials: p.specials || {} }));
 
-          // Prazo: palpites bloqueados após o fim dos quartos de final
-          // k100 começa 12 jul 02h Lisboa = 12 jul 01h UTC, damos 4h para terminar
+          // Final: 19 jul 20h UTC — só depois disto se revelam as escolhas de todos
+          const finalEnd = Date.UTC(2026, 6, 19, 23, 0, 0);
+          const specialsRevealed = Date.now() >= finalEnd;
+
+          // Prazo para apostar: fim dos quartos de final
           const lastQuarterEnd = Date.UTC(2026, 6, 12, 5, 0, 0);
           const locked = Date.now() >= lastQuarterEnd;
 
@@ -2142,9 +2145,10 @@ export default function App() {
               <div className="px-4 py-3 flex flex-col gap-3">
                 {children}
               </div>
-              {/* Palpites de todos */}
-              {allSpecials.some(p => p.specials[id]) && (
-                <div className="px-4 pb-3 flex flex-col gap-1">
+              {/* Palpites dos outros — só visíveis depois da final */}
+              {specialsRevealed && allSpecials.some(p => p.name !== myName && p.specials[id]) && (
+                <div className="px-4 pb-3 flex flex-col gap-1 border-t border-slate-700 pt-2">
+                  <p className="text-[10px] text-slate-500 mb-1">Escolhas de todos</p>
                   {allSpecials.filter(p => p.specials[id]).map(p => (
                     <div key={p.name} className="flex items-center justify-between text-xs">
                       <span className={p.name === myName ? 'text-amber-300 font-bold' : 'text-slate-400'}>{p.name}</span>
@@ -2152,6 +2156,9 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+              )}
+              {!specialsRevealed && (
+                <p className="px-4 pb-3 text-[10px] text-slate-600">🔒 Escolhas dos outros reveladas após a final</p>
               )}
             </div>
           );
