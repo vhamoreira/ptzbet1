@@ -2125,9 +2125,10 @@ export default function App() {
           // Recolhe os especiais de todos os jogadores
           const allSpecials = allPicks.map(p => ({ name: p.name, specials: p.specials || {} }));
 
-          // Prazo: palpites bloqueados após o início dos quartos de final
-          const firstQuarterKo = Date.UTC(2026, 6, 9, 20, 0, 0); // k97 9 jul 21h Lisboa
-          const locked = Date.now() >= firstQuarterKo;
+          // Prazo: palpites bloqueados após o fim dos quartos de final
+          // k100 começa 12 jul 02h Lisboa = 12 jul 01h UTC, damos 4h para terminar
+          const lastQuarterEnd = Date.UTC(2026, 6, 12, 5, 0, 0);
+          const locked = Date.now() >= lastQuarterEnd;
 
           const SpecialCard = ({ id, label, pts, description, children }) => (
             <div className="rounded-xl border border-slate-700 bg-slate-800/60 overflow-hidden">
@@ -2248,7 +2249,7 @@ export default function App() {
                 })()}
               </SpecialCard>
 
-              <p className="text-xs text-slate-600 text-center">Palpites bloqueiam quando os quartos começarem (9 jul 21h)</p>
+              <p className="text-xs text-slate-600 text-center">Palpites bloqueiam no fim dos quartos de final (12 jul ~05h UTC)</p>
             </div>
           );
         })()}
