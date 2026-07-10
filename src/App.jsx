@@ -2181,7 +2181,24 @@ export default function App() {
                 {uniqueTeams.length === 0 && <p className="text-xs text-slate-500 text-center">Equipas ainda não definidas</p>}
               </SpecialCard>
 
-              {/* Melhor marcador */}
+              {/* Vice-campeão */}
+              <SpecialCard id="runnerup" label="🥈 Vice-Campeão" pts={25} description="Qual das 8 equipas vai chegar à final mas perder?">
+                <div className="grid grid-cols-2 gap-2">
+                  {uniqueTeams.map(team => (
+                    <button
+                      key={team}
+                      disabled={locked}
+                      onClick={() => !locked && saveSpecial('runnerup', team)}
+                      className={`rounded-lg px-3 py-2 text-xs font-bold truncate transition ${
+                        mySpecials.runnerup === team
+                          ? 'bg-sky-500 text-slate-900'
+                          : locked ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >{team}</button>
+                  ))}
+                </div>
+                {uniqueTeams.length === 0 && <p className="text-xs text-slate-500 text-center">Equipas ainda não definidas</p>}
+              </SpecialCard>
               <SpecialCard id="topscorer" label="⚽ Melhor Marcador" pts={25} description="Quem vai ser o artilheiro do torneio?">
                 {(() => {
                   // Recolhe todos os marcadores das equipas dos quartos de final
