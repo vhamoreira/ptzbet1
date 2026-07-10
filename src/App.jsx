@@ -1344,6 +1344,7 @@ export default function App() {
   const [results, setResults] = useState({});
   const [extraMatches, setExtraMatches] = useState([]);
   const [myPicks, setMyPicks] = useState({});
+  const [mySpecials, setMySpecials] = useState({});
   const [allPicks, setAllPicks] = useState([]);
   const [filterGroup, setFilterGroup] = useState('Todos');
   const [proximosDays, setProximosDays] = useState(3);
@@ -1394,10 +1395,17 @@ export default function App() {
     if (!name) return;
     try {
       const p = await storage.get(`picks_${slug(name)}`, true);
-      if (p && p.value) setMyPicks(JSON.parse(p.value).matches || {});
-      else setMyPicks({});
+      if (p && p.value) {
+        const parsed = JSON.parse(p.value);
+        setMyPicks(parsed.matches || {});
+        setMySpecials(parsed.specials || {});
+      } else {
+        setMyPicks({});
+        setMySpecials({});
+      }
     } catch (e) {
       setMyPicks({});
+      setMySpecials({});
     }
   }, []);
 
@@ -1411,7 +1419,7 @@ export default function App() {
           const v = await storage.get(k, true);
           if (v && v.value) {
             const parsed = JSON.parse(v.value);
-            rows.push({ name: parsed.name || k, matches: parsed.matches || {} });
+            rows.push({ name: parsed.name || k, matches: parsed.matches || {}, specials: parsed.specials || {} });
           }
         } catch (e) {}
       }
@@ -1669,12 +1677,27 @@ export default function App() {
     setMyPicks(next);
     setAllPicks((prev) => {
       const others = prev.filter((p) => p.name !== myName);
-      return [...others, { name: myName, matches: next }];
+      return [...others, { name: myName, matches: next, specials: mySpecials }];
     });
     try {
-      await storage.set(`picks_${slug(myName)}`, JSON.stringify({ name: myName, matches: next }), true);
+      await storage.set(`picks_${slug(myName)}`, JSON.stringify({ name: myName, matches: next, specials: mySpecials }), true);
     } catch (e) {
       showToast('Erro ao guardar palpite');
+    }
+  }
+
+  async function saveSpecial(key, value) {
+    const next = { ...mySpecials, [key]: value };
+    setMySpecials(next);
+    setAllPicks((prev) => {
+      const others = prev.filter((p) => p.name !== myName);
+      return [...others, { name: myName, matches: myPicks, specials: next }];
+    });
+    try {
+      await storage.set(`picks_${slug(myName)}`, JSON.stringify({ name: myName, matches: myPicks, specials: next }), true);
+      showToast('Guardado!');
+    } catch (e) {
+      showToast('Erro ao guardar');
     }
   }
 
@@ -1821,6 +1844,7 @@ export default function App() {
               ['terminados', 'Terminados'],
               ['proximos', 'Próximos'],
               ['classificacao', 'Classificação'],
+              ['especiais', '⭐ Especiais'],
             ].map(([val, label]) => (
               <button
                 key={val}
@@ -2088,6 +2112,120 @@ export default function App() {
           </div>
         )}
       </div>
+
+        {tab === 'especiais' && (() => {
+          // Equipas dos quartos de final para o mercado de vencedor
+          const quarterTeams = ['k97','k98','k99','k100'].flatMap(kid => {
+            const r = results[kid];
+            if (!r) return [];
+            return [r.teamAName, r.teamBName].filter(Boolean);
+          });
+          const uniqueTeams = [...new Set(quarterTeams)];
+
+          // Recolhe os especiais de todos os jogadores
+          const allSpecials = allPicks.map(p => ({ name: p.name, specials: p.specials || {} }));
+
+          // Prazo: palpites bloqueados após o início dos quartos de final
+          const firstQuarterKo = Date.UTC(2026, 6, 9, 20, 0, 0); // k97 9 jul 21h Lisboa
+          const locked = Date.now() >= firstQuarterKo;
+
+          const SpecialCard = ({ id, label, pts, description, children }) => (
+            <div className="rounded-xl border border-slate-700 bg-slate-800/60 overflow-hidden">
+              <div className="px-4 py-3 flex items-center justify-between border-b border-slate-700">
+                <div>
+                  <p className="font-bold text-stone-100 text-sm">{label}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{description}</p>
+                </div>
+                <span className="text-xs font-bold text-amber-300 shrink-0 ml-3">+{pts} pts</span>
+              </div>
+              <div className="px-4 py-3 flex flex-col gap-3">
+                {children}
+              </div>
+              {/* Palpites de todos */}
+              {allSpecials.some(p => p.specials[id]) && (
+                <div className="px-4 pb-3 flex flex-col gap-1">
+                  {allSpecials.filter(p => p.specials[id]).map(p => (
+                    <div key={p.name} className="flex items-center justify-between text-xs">
+                      <span className={p.name === myName ? 'text-amber-300 font-bold' : 'text-slate-400'}>{p.name}</span>
+                      <span className="text-slate-300">{p.specials[id]}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+
+          return (
+            <div className="flex flex-col gap-4">
+              {locked && (
+                <p className="text-xs text-center text-slate-500">🔒 Palpites bloqueados — quartos de final já começaram</p>
+              )}
+
+              {/* Vencedor do torneio */}
+              <SpecialCard id="winner" label="🏆 Vencedor do Torneio" pts={25} description="Qual das 8 equipas vai ganhar o Mundial?">
+                <div className="grid grid-cols-2 gap-2">
+                  {uniqueTeams.map(team => (
+                    <button
+                      key={team}
+                      disabled={locked}
+                      onClick={() => !locked && saveSpecial('winner', team)}
+                      className={`rounded-lg px-3 py-2 text-xs font-bold truncate transition ${
+                        mySpecials.winner === team
+                          ? 'bg-amber-500 text-slate-900'
+                          : locked ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >{team}</button>
+                  ))}
+                </div>
+                {uniqueTeams.length === 0 && <p className="text-xs text-slate-500 text-center">Equipas ainda não definidas</p>}
+              </SpecialCard>
+
+              {/* Melhor marcador */}
+              <SpecialCard id="topscorer" label="⚽ Melhor Marcador" pts={25} description="Quem vai ser o artilheiro do torneio?">
+                {!locked ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nome do jogador..."
+                      value={mySpecials.topscorer || ''}
+                      onChange={e => setMySpecials(prev => ({ ...prev, topscorer: e.target.value }))}
+                      className="flex-1 rounded-lg bg-slate-700 border border-slate-600 text-stone-100 px-3 py-2 text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      onClick={() => saveSpecial('topscorer', mySpecials.topscorer || '')}
+                      className="shrink-0 bg-amber-500 text-slate-900 font-bold px-3 py-2 rounded-lg text-sm hover:bg-amber-400 transition"
+                    >Guardar</button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-300">{mySpecials.topscorer || <span className="text-slate-500 italic">não escolheste</span>}</p>
+                )}
+              </SpecialCard>
+
+              {/* MVP */}
+              <SpecialCard id="mvp" label="🌟 MVP do Torneio" pts={25} description="Quem vai ser o jogador mais valioso?">
+                {!locked ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nome do jogador..."
+                      value={mySpecials.mvp || ''}
+                      onChange={e => setMySpecials(prev => ({ ...prev, mvp: e.target.value }))}
+                      className="flex-1 rounded-lg bg-slate-700 border border-slate-600 text-stone-100 px-3 py-2 text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      onClick={() => saveSpecial('mvp', mySpecials.mvp || '')}
+                      className="shrink-0 bg-amber-500 text-slate-900 font-bold px-3 py-2 rounded-lg text-sm hover:bg-amber-400 transition"
+                    >Guardar</button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-300">{mySpecials.mvp || <span className="text-slate-500 italic">não escolheste</span>}</p>
+                )}
+              </SpecialCard>
+
+              <p className="text-xs text-slate-600 text-center">Palpites bloqueiam quando os quartos começarem (9 jul 21h)</p>
+            </div>
+          );
+        })()}
 
       {historyPlayer && (
         <PlayerHistoryModal
