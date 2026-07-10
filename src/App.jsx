@@ -2182,44 +2182,70 @@ export default function App() {
 
               {/* Melhor marcador */}
               <SpecialCard id="topscorer" label="⚽ Melhor Marcador" pts={25} description="Quem vai ser o artilheiro do torneio?">
-                {!locked ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Nome do jogador..."
-                      value={mySpecials.topscorer || ''}
-                      onChange={e => setMySpecials(prev => ({ ...prev, topscorer: e.target.value }))}
-                      className="flex-1 rounded-lg bg-slate-700 border border-slate-600 text-stone-100 px-3 py-2 text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                    />
-                    <button
-                      onClick={() => saveSpecial('topscorer', mySpecials.topscorer || '')}
-                      className="shrink-0 bg-amber-500 text-slate-900 font-bold px-3 py-2 rounded-lg text-sm hover:bg-amber-400 transition"
-                    >Guardar</button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-300">{mySpecials.topscorer || <span className="text-slate-500 italic">não escolheste</span>}</p>
-                )}
+                {(() => {
+                  // Recolhe todos os marcadores das equipas dos quartos de final
+                  const allMatchesEver = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
+                  const scorerSet = new Set();
+                  for (const m of allMatchesEver) {
+                    const r = results[m.id];
+                    if (!r || !r.finished || !r.scorers) continue;
+                    const teamA = r.teamAName || m.teamA;
+                    const teamB = r.teamBName || m.teamB;
+                    const isQFTeam = uniqueTeams.some(t =>
+                      t === teamA || t === teamB
+                    );
+                    if (!isQFTeam) continue;
+                    for (const s of r.scorers) if (s) scorerSet.add(s);
+                  }
+                  const scorerList = [...scorerSet].sort();
+
+                  if (!locked) return (
+                    <div className="flex flex-col gap-2">
+                      <select
+                        value={mySpecials.topscorer || ''}
+                        onChange={e => saveSpecial('topscorer', e.target.value)}
+                        className="w-full rounded-lg bg-slate-700 border border-slate-600 text-stone-100 px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="">Escolhe um jogador...</option>
+                        {scorerList.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                  return <p className="text-sm text-slate-300">{mySpecials.topscorer || <span className="text-slate-500 italic">não escolheste</span>}</p>;
+                })()}
               </SpecialCard>
 
               {/* MVP */}
               <SpecialCard id="mvp" label="🌟 MVP do Torneio" pts={25} description="Quem vai ser o jogador mais valioso?">
-                {!locked ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Nome do jogador..."
+                {(() => {
+                  const allMatchesEver = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
+                  const scorerSet = new Set();
+                  for (const m of allMatchesEver) {
+                    const r = results[m.id];
+                    if (!r || !r.finished || !r.scorers) continue;
+                    const teamA = r.teamAName || m.teamA;
+                    const teamB = r.teamBName || m.teamB;
+                    if (!uniqueTeams.some(t => t === teamA || t === teamB)) continue;
+                    for (const s of r.scorers) if (s) scorerSet.add(s);
+                  }
+                  const scorerList = [...scorerSet].sort();
+
+                  if (!locked) return (
+                    <select
                       value={mySpecials.mvp || ''}
-                      onChange={e => setMySpecials(prev => ({ ...prev, mvp: e.target.value }))}
-                      className="flex-1 rounded-lg bg-slate-700 border border-slate-600 text-stone-100 px-3 py-2 text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                    />
-                    <button
-                      onClick={() => saveSpecial('mvp', mySpecials.mvp || '')}
-                      className="shrink-0 bg-amber-500 text-slate-900 font-bold px-3 py-2 rounded-lg text-sm hover:bg-amber-400 transition"
-                    >Guardar</button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-300">{mySpecials.mvp || <span className="text-slate-500 italic">não escolheste</span>}</p>
-                )}
+                      onChange={e => saveSpecial('mvp', e.target.value)}
+                      className="w-full rounded-lg bg-slate-700 border border-slate-600 text-stone-100 px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="">Escolhe um jogador...</option>
+                      {scorerList.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  );
+                  return <p className="text-sm text-slate-300">{mySpecials.mvp || <span className="text-slate-500 italic">não escolheste</span>}</p>;
+                })()}
               </SpecialCard>
 
               <p className="text-xs text-slate-600 text-center">Palpites bloqueiam quando os quartos começarem (9 jul 21h)</p>
