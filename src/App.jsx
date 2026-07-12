@@ -1345,6 +1345,8 @@ export default function App() {
   const [extraMatches, setExtraMatches] = useState([]);
   const [myPicks, setMyPicks] = useState({});
   const [mySpecials, setMySpecials] = useState({});
+  const [adminSpecialName, setAdminSpecialName] = useState('');
+  const [adminSpecialDraft, setAdminSpecialDraft] = useState({});
   const [allPicks, setAllPicks] = useState([]);
   const [filterGroup, setFilterGroup] = useState('Todos');
   const [proximosDays, setProximosDays] = useState(3);
@@ -2277,9 +2279,6 @@ export default function App() {
 
               {/* Admin: editar especiais de outro jogador */}
               {isAdmin && (() => {
-                const [adminSpecialName, setAdminSpecialName] = React.useState('');
-                const [adminSpecialDraft, setAdminSpecialDraft] = React.useState({});
-
                 const loadAdminSpecials = (name) => {
                   const p = allPicks.find(p => p.name === name);
                   setAdminSpecialDraft(p?.specials || {});
