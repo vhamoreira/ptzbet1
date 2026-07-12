@@ -2274,6 +2274,95 @@ export default function App() {
               </SpecialCard>
 
               <p className="text-xs text-slate-600 text-center">Palpites bloqueiam no fim dos quartos de final (12 jul ~05h UTC)</p>
+
+              {/* Admin: editar especiais de outro jogador */}
+              {isAdmin && (() => {
+                const [adminSpecialName, setAdminSpecialName] = React.useState('');
+                const [adminSpecialDraft, setAdminSpecialDraft] = React.useState({});
+
+                const loadAdminSpecials = (name) => {
+                  const p = allPicks.find(p => p.name === name);
+                  setAdminSpecialDraft(p?.specials || {});
+                };
+
+                const saveAdminSpecials = async () => {
+                  if (!adminSpecialName.trim()) return;
+                  const name = adminSpecialName.trim();
+                  const existing = allPicks.find(p => p.name === name);
+                  const next = { name, matches: existing?.matches || {}, specials: adminSpecialDraft };
+                  try {
+                    await storage.set(`picks_${slug(name)}`, JSON.stringify(next), true);
+                    setAllPicks(prev => [...prev.filter(p => p.name !== name), { ...next }]);
+                    showToast('Especiais guardados!');
+                  } catch (e) { showToast('Erro ao guardar'); }
+                };
+
+                return (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex flex-col gap-3">
+                    <p className="text-xs font-bold text-amber-300">Admin: editar especiais de alguém</p>
+                    <div className="flex gap-2">
+                      <select
+                        value={adminSpecialName}
+                        onChange={e => { setAdminSpecialName(e.target.value); loadAdminSpecials(e.target.value); }}
+                        className="flex-1 rounded-lg bg-slate-700 border border-slate-600 text-stone-100 px-2 py-1.5 text-sm"
+                      >
+                        <option value="">Escolhe jogador...</option>
+                        {knownPlayers.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                    {adminSpecialName && (
+                      <>
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xs text-slate-400">🏆 Vencedor</p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {uniqueTeams.map(t => (
+                              <button key={t} onClick={() => setAdminSpecialDraft(d => ({ ...d, winner: t }))}
+                                className={`rounded-lg px-2 py-1.5 text-xs font-bold truncate transition ${adminSpecialDraft.winner === t ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300'}`}>
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">🥈 Vice-Campeão</p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {uniqueTeams.map(t => (
+                              <button key={t} onClick={() => setAdminSpecialDraft(d => ({ ...d, runnerup: t }))}
+                                className={`rounded-lg px-2 py-1.5 text-xs font-bold truncate transition ${adminSpecialDraft.runnerup === t ? 'bg-sky-500 text-slate-900' : 'bg-slate-700 text-slate-300'}`}>
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                          {['topscorer','mvp'].map(key => {
+                            const allMatchesEver2 = [...BASE_MATCHES, ...KNOCKOUT_MATCHES];
+                            const ss = new Set();
+                            for (const m of allMatchesEver2) {
+                              const r = results[m.id];
+                              if (!r?.finished || !r.scorers) continue;
+                              const tA = r.teamAName || m.teamA, tB = r.teamBName || m.teamB;
+                              if (!uniqueTeams.some(t => t === tA || t === tB)) continue;
+                              for (const s of r.scorers) if (s) ss.add(s);
+                            }
+                            const list = [...ss].sort();
+                            return (
+                              <div key={key}>
+                                <p className="text-xs text-slate-400 mb-1">{key === 'topscorer' ? '⚽ Melhor Marcador' : '🌟 MVP'}</p>
+                                <select value={adminSpecialDraft[key] || ''} onChange={e => setAdminSpecialDraft(d => ({ ...d, [key]: e.target.value }))}
+                                  className="w-full rounded-lg bg-slate-700 border border-slate-600 text-stone-100 px-2 py-1.5 text-sm">
+                                  <option value="">—</option>
+                                  {list.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <button onClick={saveAdminSpecials}
+                          className="w-full bg-amber-500 text-slate-900 font-bold py-2 rounded-lg text-sm hover:bg-amber-400 transition">
+                          Guardar especiais de {adminSpecialName}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
