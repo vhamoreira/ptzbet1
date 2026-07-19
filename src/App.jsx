@@ -1464,6 +1464,9 @@ export default function App() {
   }
 
   const leaderboard = useMemo(() => {
+    const specialsResults = results['specials_results'];
+    const specialsPoints = specialsResults?.points || {};
+
     const rows = allPicks.map(({ name, matches }) => {
       let total = 0, exactCount = 0, outcomeCount = 0, scorerCount = 0, scorerPoints = 0, plenoCount = 0, qualifyCount = 0;
       for (const m of allMatchesEver) {
@@ -1475,7 +1478,9 @@ export default function App() {
         if (pts.exact && pts.outcome && pts.scorer) plenoCount++;
         if (pts.qualify) qualifyCount++;
       }
-      return { name, total, exactCount, outcomeCount, scorerCount, scorerPoints, plenoCount, qualifyCount };
+      const specialPts = specialsPoints[name] || 0;
+      total += specialPts;
+      return { name, total, exactCount, outcomeCount, scorerCount, scorerPoints, plenoCount, qualifyCount, specialPts };
     });
     rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     return rows;
@@ -2086,7 +2091,7 @@ export default function App() {
                       <p className="text-xs text-slate-400">
                         {highlight
                           ? <><span className="text-amber-300 font-semibold">{highlight}</span> · {row.total} pts total</>
-                          : <>{row.exactCount} exatos · {row.outcomeCount} venc. · {row.scorerCount} marc. · {row.plenoCount} plenos · {row.qualifyCount} apuram.</>
+                          : <>{row.exactCount} exatos · {row.outcomeCount} venc. · {row.scorerCount} marc. · {row.plenoCount} plenos · {row.qualifyCount} apuram.{row.specialPts > 0 ? ` · ${row.specialPts} especiais` : ''}</>
                         }
                       </p>
                       {isPlenoKing && (
@@ -2127,7 +2132,7 @@ export default function App() {
           // Recolhe os especiais de todos os jogadores
           const allSpecials = allPicks.map(p => ({ name: p.name, specials: p.specials || {} }));
 
-          // Final: 19 jul 20h UTC — só depois disto se revelam as escolhas de todos
+          // Final já aconteceu — revelar todas as escolhas
           const finalEnd = Date.UTC(2026, 6, 19, 23, 0, 0);
           const specialsRevealed = Date.now() >= finalEnd;
 
@@ -2170,6 +2175,29 @@ export default function App() {
               {locked && (
                 <p className="text-xs text-center text-slate-500">🔒 Palpites bloqueados — quartos de final já começaram</p>
               )}
+
+              {/* Resultados reais dos especiais */}
+              {results['specials_results'] && (() => {
+                const sr = results['specials_results'];
+                const pts = sr.points || {};
+                return (
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex flex-col gap-2">
+                    <p className="text-xs font-bold text-emerald-400 mb-1">🏆 Resultados finais dos Especiais</p>
+                    <p className="text-xs text-slate-300">🏆 Vencedor: <span className="font-bold text-stone-100">{sr.winner}</span></p>
+                    <p className="text-xs text-slate-300">🥈 Vice-campeão: <span className="font-bold text-stone-100">{sr.runnerup}</span></p>
+                    <p className="text-xs text-slate-300">⚽ Melhor Marcador: <span className="font-bold text-stone-100">{sr.topscorer}</span></p>
+                    <p className="text-xs text-slate-300">🌟 MVP: <span className="font-bold text-stone-100">{sr.mvp}</span></p>
+                    <div className="border-t border-slate-700 mt-2 pt-2 flex flex-col gap-1">
+                      {Object.entries(pts).sort((a,b) => b[1]-a[1]).map(([name, p]) => (
+                        <div key={name} className="flex justify-between text-xs">
+                          <span className={name === myName ? 'text-amber-300 font-bold' : 'text-slate-300'}>{name}</span>
+                          <span className={p > 0 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>+{p} pts</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Vencedor do torneio */}
               <SpecialCard id="winner" label="🏆 Vencedor do Torneio" pts={25} description="Qual das 8 equipas vai ganhar o Mundial?">
