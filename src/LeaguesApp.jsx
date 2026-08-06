@@ -66,6 +66,25 @@ function pointsFor(pick, match) {
   return { exact: exact * mult, outcome: outcome * mult, both: both * mult, total: (exact + outcome + both) * mult };
 }
 
+// Um jogo considera-se "com palpite" se tiver pelo menos o 1X2 escolhido.
+function hasPick(pick) {
+  return !!(pick && pick.outcome);
+}
+
+// Conta, para uma semana, quantos jogos AINDA ABERTOS faltam preencher.
+// Só conta jogos que ainda não começaram (ainda dá para apostar).
+function weekMissing(week, weekPicks) {
+  const now = Date.now();
+  let open = 0, done = 0;
+  for (const m of (week.matches || [])) {
+    const kickedOff = new Date(m.kickoff).getTime() <= now;
+    if (kickedOff) continue; // já não dá para apostar, não conta como "em falta"
+    open++;
+    if (hasPick(weekPicks?.[m.id])) done++;
+  }
+  return { open, done, missing: open - done };
+}
+
 export default function LeaguesApp({ onBackToArchive }) {
   const [stage, setStage] = useState('loading'); // loading | name | app
   const [myName, setMyName] = useState('');
@@ -243,6 +262,7 @@ export default function LeaguesApp({ onBackToArchive }) {
             <TournamentList
               tournaments={tournaments.filter(t => t.status === 'active')}
               weeks={weeks}
+              myPicks={myPicks}
               onOpen={(t) => { setActiveTournament(t); setView('tournament'); setInnerTab('current'); }}
             />
           </>
@@ -421,10 +441,29 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
     };
   };
 
+  // Total de palpites em falta em todas as secções (jogos ainda abertos)
+  const totalMissing = useMemo(() => {
+    let missing = 0;
+    for (const s of sections) {
+      const wp = myPicks[s.week.id] || {};
+      missing += weekMissing(s.week, wp).missing;
+    }
+    return missing;
+  }, [sections, myPicks]);
+
   return (
     <div className="flex flex-col gap-4">
-      <div>
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-black">Jogos da Semana</h1>
+        {totalMissing > 0 ? (
+          <span className="text-xs font-bold text-amber-300 bg-amber-500/15 px-3 py-1 rounded-full">
+            {totalMissing} palpite{totalMissing !== 1 ? 's' : ''} em falta
+          </span>
+        ) : sections.length > 0 ? (
+          <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-3 py-1 rounded-full">
+            ✓ Tudo em dia
+          </span>
+        ) : null}
       </div>
 
       {sections.length === 0 && (
@@ -477,6 +516,7 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
       {sections.map(({ tournament, week }) => {
         const locked = new Date(week.deadline).getTime() <= now;
         const weekPicks = myPicks[week.id] || {};
+        const { missing, open } = weekMissing(week, weekPicks);
         let matches = week.matches.filter(m => !m.isHighlight);
         if (selectedDay) matches = matches.filter(m => m.kickoff?.startsWith(selectedDay));
         if (matches.length === 0) return null;
@@ -484,9 +524,17 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
           <div key={tournament.id}>
             <div className="flex items-center justify-between mb-2">
               <SectionLabel emblem={LEAGUE_EMBLEM_BY_ID[tournament.id]} text={tournament.name} />
-              <span className={`text-[10px] font-bold ${locked ? 'text-rose-400' : 'text-emerald-400'}`}>
-                {locked ? '🔒 Fechado' : `Fecha ${new Date(week.deadline).toLocaleDateString('pt-PT', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`}
-              </span>
+              {open > 0 && (
+                missing > 0 ? (
+                  <span className="text-[10px] font-bold text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded-full">
+                    Faltam {missing} de {open}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full">
+                    ✓ Tudo preenchido
+                  </span>
+                )
+              )}
             </div>
             <div className="flex flex-col gap-2.5">
               {matches.map(m => (
@@ -673,7 +721,7 @@ function ScoreCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }
 }
 
 // ---- Lista de torneios ----
-function TournamentList({ tournaments, weeks, onOpen, emptyMsg }) {
+function TournamentList({ tournaments, weeks, onOpen, emptyMsg, myPicks }) {
   const STYLE = {
     liga_principal: {
       emblem: 'https://crests.football-data.org/PL.png',
@@ -698,12 +746,18 @@ function TournamentList({ tournaments, weeks, onOpen, emptyMsg }) {
     const tWeeks = Object.values(weeks).filter(w => w.tournamentId === t.id);
     const now = Date.now();
     const activeWeek = tWeeks.find(w => new Date(w.dateTo).getTime() > now - 24 * 3600 * 1000);
+    const missing = activeWeek && myPicks ? weekMissing(activeWeek, myPicks[activeWeek.id] || {}).missing : 0;
 
     return (
       <button
         onClick={() => onOpen(t)}
         className={`w-full text-left rounded-2xl overflow-hidden border border-slate-700 ${style.card} p-5 hover:border-amber-500/50 transition group relative`}
       >
+        {missing > 0 && (
+          <span className="absolute top-3 right-3 text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full">
+            {missing} em falta
+          </span>
+        )}
         <div className="flex items-center gap-4">
           {style.emblem ? (
             <img src={style.emblem} alt="" className="w-14 h-14 object-contain drop-shadow-lg" />
