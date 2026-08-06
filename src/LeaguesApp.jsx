@@ -724,19 +724,25 @@ function ScoreCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }
 function TournamentList({ tournaments, weeks, onOpen, emptyMsg, myPicks }) {
   const STYLE = {
     liga_principal: {
-      emblem: 'https://crests.football-data.org/PL.png',
-      card: 'bg-gradient-to-br from-purple-600/40 via-indigo-700/30 to-slate-900',
-      accent: 'text-purple-300',
+      card: 'bg-gradient-to-br from-purple-600/50 via-indigo-800/40 to-slate-950',
+      accent: 'text-purple-200',
+      // emblemas das 5 ligas usadas
+      leagueEmblems: [
+        'https://media.api-sports.io/football/leagues/39.png',
+        'https://media.api-sports.io/football/leagues/140.png',
+        'https://media.api-sports.io/football/leagues/135.png',
+        'https://media.api-sports.io/football/leagues/78.png',
+        'https://media.api-sports.io/football/leagues/94.png',
+      ],
     },
     champions: {
-      emblem: 'https://crests.football-data.org/CL.png',
-      card: 'bg-gradient-to-br from-blue-700/40 via-blue-900/30 to-slate-900',
-      accent: 'text-blue-300',
+      card: 'bg-gradient-to-br from-blue-700/50 via-blue-950/40 to-slate-950',
+      accent: 'text-blue-200',
+      bigEmblem: 'https://media.api-sports.io/football/leagues/2.png',
     },
     _default: {
-      emblem: '',
-      card: 'bg-gradient-to-br from-slate-700/40 to-slate-900',
-      accent: 'text-amber-300',
+      card: 'bg-gradient-to-br from-amber-600/40 via-orange-900/30 to-slate-950',
+      accent: 'text-amber-200',
     },
   };
 
@@ -751,28 +757,45 @@ function TournamentList({ tournaments, weeks, onOpen, emptyMsg, myPicks }) {
     return (
       <button
         onClick={() => onOpen(t)}
-        className={`w-full text-left rounded-2xl overflow-hidden border border-slate-700 ${style.card} p-5 hover:border-amber-500/50 transition group relative`}
+        className={`w-full text-left rounded-2xl overflow-hidden border border-slate-700 ${style.card} hover:border-amber-500/50 transition group relative min-h-[150px] flex flex-col justify-between`}
       >
+        {/* Emblemas de fundo */}
+        {style.leagueEmblems && (
+          <div className="absolute inset-0 flex items-center justify-end gap-3 pr-4 opacity-[0.13] pointer-events-none overflow-hidden">
+            {style.leagueEmblems.map((e, i) => (
+              <img key={i} src={e} alt="" className="w-20 h-20 object-contain shrink-0" />
+            ))}
+          </div>
+        )}
+        {style.bigEmblem && (
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-20 pointer-events-none">
+            <img src={style.bigEmblem} alt="" className="w-28 h-28 object-contain" />
+          </div>
+        )}
+
         {missing > 0 && (
-          <span className="absolute top-3 right-3 text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full">
+          <span className="absolute top-3 right-3 z-10 text-[10px] font-bold text-amber-200 bg-amber-900/60 backdrop-blur px-2 py-0.5 rounded-full">
             {missing} em falta
           </span>
         )}
-        <div className="flex items-center gap-4">
-          {style.emblem ? (
-            <img src={style.emblem} alt="" className="w-14 h-14 object-contain drop-shadow-lg" />
-          ) : (
-            <div className="w-14 h-14 rounded-xl bg-slate-800 flex items-center justify-center text-2xl">🎯</div>
-          )}
-          <div className="flex-1">
-            <p className={`text-[10px] font-bold uppercase tracking-wider ${style.accent}`}>{typeLabel}</p>
-            <p className="font-bold text-lg text-stone-100">{t.name}</p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {t.season}
-              {activeWeek && <> · {activeWeek.matches.length} jogos esta semana</>}
-            </p>
+
+        {/* Conteúdo */}
+        <div className="relative p-5 pt-6">
+          <p className={`text-[10px] font-bold uppercase tracking-widest ${style.accent}`}>{typeLabel}</p>
+          <p className="font-black text-2xl text-white mt-1 drop-shadow">{t.name}</p>
+        </div>
+
+        <div className="relative p-5 pt-0 flex items-end justify-between">
+          <div>
+            <p className="text-xs text-slate-300">{t.season}</p>
+            {activeWeek && (
+              <p className="text-xs text-slate-400 mt-0.5">{activeWeek.matches.length} jogos esta semana</p>
+            )}
           </div>
-          <ChevronDown className="-rotate-90 text-slate-500 group-hover:text-amber-400 transition" size={20} />
+          <span className="flex items-center gap-1 text-xs font-bold text-white bg-white/10 backdrop-blur px-3 py-1.5 rounded-full group-hover:bg-amber-500 group-hover:text-slate-900 transition">
+            Entrar
+            <ChevronDown className="-rotate-90" size={14} />
+          </span>
         </div>
       </button>
     );
