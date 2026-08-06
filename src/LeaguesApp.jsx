@@ -359,11 +359,12 @@ function SettingsIcon() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0114 0v1"/></svg>;
 }
 
-// ---- HOMEPAGE: todos os jogos da semana agrupados por torneio ----
+// ---- HOMEPAGE: selector de dias + jogos agrupados por torneio ----
 function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick }) {
   const now = Date.now();
+  const [selectedDay, setSelectedDay] = useState(null); // 'YYYY-MM-DD' ou null = todos
 
-  // Para cada torneio activo, encontra a semana actual
+  // Secções (torneios com semana actual)
   const sections = useMemo(() => {
     const out = [];
     for (const t of tournaments.filter(t => t.status === 'active')) {
@@ -371,14 +372,39 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
         .filter(w => w.tournamentId === t.id)
         .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
       const current = tWeeks.filter(w => new Date(w.dateTo).getTime() > now - 24 * 3600 * 1000)[0];
-      if (current && current.matches?.length) {
-        out.push({ tournament: t, week: current });
-      }
+      if (current && current.matches?.length) out.push({ tournament: t, week: current });
     }
     return out;
   }, [tournaments, weeks, now]);
 
-  // Jogo da semana (highlight) — procura em todas as secções
+  // Todos os jogos de todas as secções, para montar os dias
+  const allMatches = useMemo(() => {
+    const arr = [];
+    for (const s of sections) {
+      for (const m of s.week.matches) {
+        arr.push({ ...m, _tournament: s.tournament, _week: s.week });
+      }
+    }
+    return arr;
+  }, [sections]);
+
+  // Dias únicos com jogos
+  const days = useMemo(() => {
+    const set = new Set();
+    for (const m of allMatches) {
+      if (m.kickoff) set.add(m.kickoff.split('T')[0]);
+    }
+    return [...set].sort();
+  }, [allMatches]);
+
+  // Selecciona por defeito o próximo dia com jogos
+  useEffect(() => {
+    if (selectedDay || days.length === 0) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const upcoming = days.find(d => d >= todayStr) || days[0];
+    setSelectedDay(upcoming);
+  }, [days, selectedDay]);
+
   const highlight = useMemo(() => {
     for (const s of sections) {
       const h = s.week.matches.find(m => m.isHighlight);
@@ -387,23 +413,52 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
     return null;
   }, [sections]);
 
-  const today = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
+  const dayLabel = (iso) => {
+    const d = new Date(iso + 'T12:00:00Z');
+    return {
+      weekday: d.toLocaleDateString('pt-PT', { weekday: 'short' }).replace('.', '').toUpperCase(),
+      day: d.getUTCDate(),
+    };
+  };
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black">Jogos da Semana</h1>
-          <p className="text-xs text-slate-400 mt-0.5 capitalize">{today}</p>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-black">Jogos da Semana</h1>
       </div>
 
       {sections.length === 0 && (
         <p className="text-sm text-slate-500 text-center py-12">Ainda não há jogos definidos para esta semana.</p>
       )}
 
-      {/* Jogo da Semana */}
-      {highlight && (
+      {/* Selector de dias */}
+      {days.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+          <button
+            onClick={() => setSelectedDay(null)}
+            className={`shrink-0 px-3 py-2 rounded-full text-xs font-bold transition ${selectedDay === null ? 'bg-lime-400 text-slate-900' : 'bg-slate-800 text-slate-400'}`}
+          >Todos</button>
+          {days.map(iso => {
+            const { weekday, day } = dayLabel(iso);
+            const isSel = selectedDay === iso;
+            const count = allMatches.filter(m => m.kickoff?.startsWith(iso)).length;
+            return (
+              <button
+                key={iso}
+                onClick={() => setSelectedDay(iso)}
+                className={`shrink-0 flex flex-col items-center px-3.5 py-1.5 rounded-full transition ${isSel ? 'bg-lime-400 text-slate-900' : 'bg-slate-800 text-slate-400'}`}
+              >
+                <span className="text-[9px] font-bold uppercase">{weekday}</span>
+                <span className="text-base font-black leading-none">{day}</span>
+                <span className={`text-[8px] ${isSel ? 'text-slate-700' : 'text-slate-500'}`}>{count} jogo{count !== 1 ? 's' : ''}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Jogo da Semana (só quando não filtrado, ou quando o highlight é nesse dia) */}
+      {highlight && (selectedDay === null || highlight.match.kickoff?.startsWith(selectedDay)) && (
         <div>
           <SectionLabel icon="🔥" text="Jogo da Semana" />
           <HighlightCard
@@ -418,12 +473,13 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
         </div>
       )}
 
-      {/* Secções por torneio */}
+      {/* Secções por torneio, filtradas pelo dia */}
       {sections.map(({ tournament, week }) => {
         const locked = new Date(week.deadline).getTime() <= now;
         const weekPicks = myPicks[week.id] || {};
-        const normalMatches = week.matches.filter(m => !m.isHighlight);
-        if (normalMatches.length === 0) return null;
+        let matches = week.matches.filter(m => !m.isHighlight);
+        if (selectedDay) matches = matches.filter(m => m.kickoff?.startsWith(selectedDay));
+        if (matches.length === 0) return null;
         return (
           <div key={tournament.id}>
             <div className="flex items-center justify-between mb-2">
@@ -433,7 +489,7 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
               </span>
             </div>
             <div className="flex flex-col gap-2.5">
-              {normalMatches.map(m => (
+              {matches.map(m => (
                 <ScoreCard
                   key={m.id}
                   match={m}
