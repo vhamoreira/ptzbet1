@@ -968,89 +968,103 @@ function HighlightCard({ match, weekId, pick, locked, myName, allPicks, onSavePi
   const kickoffStr = new Date(match.kickoff).toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="rounded-2xl overflow-hidden border-2 border-amber-500/60 bg-gradient-to-br from-purple-700/40 via-indigo-800/30 to-slate-900 relative shadow-lg shadow-amber-500/10">
-      {/* Faixa de topo */}
-      <div className="px-4 py-2.5 flex items-center justify-between bg-gradient-to-r from-amber-500/20 to-transparent border-b border-amber-500/30">
-        <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-300">
-          🔥 Jogo da Semana
-        </span>
-        <span className="text-[10px] font-bold text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded-full">PONTOS A DOBRAR</span>
-      </div>
+    <div className="rounded-2xl overflow-hidden border-2 border-amber-500/60 relative shadow-xl shadow-amber-500/10">
+      {/* ===== POSTER CINEMATOGRÁFICO ===== */}
+      <div className="relative overflow-hidden">
+        {/* Fundo dramático em camadas */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(168,85,247,0.35),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(56,189,248,0.28),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(245,158,11,0.25),transparent_60%)]" />
+        {/* riscas diagonais subtis */}
+        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'repeating-linear-gradient(115deg, #fff 0, #fff 1px, transparent 1px, transparent 22px)' }} />
 
-      {/* Liga */}
-      <div className="pt-4 flex items-center justify-center gap-1.5">
-        {match.leagueEmblem && <img src={match.leagueEmblem} alt="" className="w-4 h-4 object-contain" />}
-        <span className="text-[10px] uppercase tracking-wider text-slate-300">{match.leagueName}</span>
-      </div>
+        {/* Faixa de topo */}
+        <div className="relative px-4 py-2.5 flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-amber-300 drop-shadow">
+            🔥 Jogo da Semana
+          </span>
+          <span className="text-[9px] font-black text-slate-900 bg-amber-400 px-2 py-0.5 rounded-full tracking-wide">2× PONTOS</span>
+        </div>
 
-      {/* Contagem decrescente ou estado */}
-      <div className="flex items-center justify-center py-2">
-        {finished ? (
-          <span className="text-[10px] font-bold text-slate-400 bg-slate-700/50 px-3 py-1 rounded-full">TERMINADO</span>
-        ) : live ? (
-          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full">● AO VIVO</span>
-        ) : (
-          <div className="flex items-center gap-1 text-center">
-            {[[pad(days), 'd'], [pad(hours), 'h'], [pad(mins), 'm'], [pad(secs), 's']].map(([v, l], i) => (
+        {/* Liga */}
+        <div className="relative flex items-center justify-center gap-1.5 pt-1">
+          {match.leagueEmblem && <img src={match.leagueEmblem} alt="" className="w-4 h-4 object-contain opacity-90" />}
+          <span className="text-[10px] uppercase tracking-[0.2em] text-slate-300 font-bold">{match.leagueName}</span>
+        </div>
+
+        {/* MATCH DAY */}
+        <div className="relative text-center pt-1 pb-1">
+          <span className="text-[9px] font-black uppercase tracking-[0.45em] text-white/40">Match Day</span>
+        </div>
+
+        {/* Escudos protagonistas */}
+        <div className="relative px-4 pt-2 pb-4 flex items-stretch justify-between gap-1">
+          {/* Casa */}
+          <div className="flex-1 flex flex-col items-center gap-2">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full bg-purple-500/30 blur-2xl scale-125" />
+              {match.homeCrest && <img src={match.homeCrest} alt="" className="relative w-24 h-24 object-contain drop-shadow-[0_4px_20px_rgba(0,0,0,0.6)]" />}
+            </div>
+            <span className="font-black text-sm leading-tight text-center text-white drop-shadow uppercase tracking-wide">{match.homeTeam}</span>
+          </div>
+
+          {/* Centro: VS ou placar + contagem */}
+          <div className="flex flex-col items-center justify-center px-1 min-w-[72px]">
+            {finished || live ? (
+              <div className="text-4xl font-black tabular-nums text-white drop-shadow-lg">{match.scoreHome ?? 0}<span className="text-white/40 mx-0.5">:</span>{match.scoreAway ?? 0}</div>
+            ) : (
+              <div className="text-3xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-amber-300 to-amber-500 drop-shadow">VS</div>
+            )}
+            {live && <span className="mt-1 text-[9px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">● AO VIVO</span>}
+            {finished && <span className="mt-1 text-[9px] font-bold text-white/50 uppercase tracking-wide">Final</span>}
+          </div>
+
+          {/* Fora */}
+          <div className="flex-1 flex flex-col items-center gap-2">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full bg-sky-500/30 blur-2xl scale-125" />
+              {match.awayCrest && <img src={match.awayCrest} alt="" className="relative w-24 h-24 object-contain drop-shadow-[0_4px_20px_rgba(0,0,0,0.6)]" />}
+            </div>
+            <span className="font-black text-sm leading-tight text-center text-white drop-shadow uppercase tracking-wide">{match.awayTeam}</span>
+          </div>
+        </div>
+
+        {/* Contagem decrescente / data */}
+        {!finished && !live && (
+          <div className="relative flex items-center justify-center gap-1 pb-4">
+            {[[pad(days), 'DIAS'], [pad(hours), 'HRS'], [pad(mins), 'MIN'], [pad(secs), 'SEG']].map(([v, l], i) => (
               <React.Fragment key={l}>
-                {i > 0 && <span className="text-slate-600 font-bold">:</span>}
-                <div className="bg-slate-800/80 rounded-lg px-2 py-1 min-w-[34px]">
-                  <span className="block text-sm font-black tabular-nums">{v}</span>
-                  <span className="block text-[8px] text-slate-500 uppercase">{l}</span>
+                {i > 0 && <span className="text-white/30 font-black text-lg -mt-2">:</span>}
+                <div className="bg-black/40 backdrop-blur rounded-lg px-2.5 py-1 min-w-[40px] text-center border border-white/10">
+                  <span className="block text-lg font-black tabular-nums text-white leading-none">{v}</span>
+                  <span className="block text-[7px] text-white/50 uppercase tracking-wider mt-0.5">{l}</span>
                 </div>
               </React.Fragment>
             ))}
           </div>
         )}
+
+        {/* Barra de distribuição (após kickoff) */}
+        {split && (
+          <div className="relative px-4 pb-4">
+            <div className="flex items-center justify-between text-[10px] text-white/70 mb-1 font-bold">
+              <span>{split.pctA}%</span>
+              <span className="text-white/40 uppercase tracking-wide text-[9px]">Palpites da galera</span>
+              <span>{split.pctB}%</span>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden bg-black/40 flex">
+              <div className="bg-gradient-to-r from-purple-400 to-purple-600" style={{ width: `${split.pctA}%` }} />
+              <div className="bg-slate-600" style={{ width: `${100 - split.pctA - split.pctB}%` }} />
+              <div className="bg-gradient-to-r from-sky-600 to-sky-400" style={{ width: `${split.pctB}%` }} />
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Equipas com escudos grandes */}
-      <div className="px-4 py-4 flex items-center justify-between gap-2">
-        <div className="flex-1 flex flex-col items-center gap-2 text-center">
-          <div className="w-20 h-20 rounded-full bg-slate-800/60 flex items-center justify-center p-3">
-            {match.homeCrest && <img src={match.homeCrest} alt="" className="w-full h-full object-contain drop-shadow-lg" />}
-          </div>
-          <span className="font-bold text-sm leading-tight">{match.homeTeam}</span>
-        </div>
-        <div className="px-2 text-center min-w-[70px]">
-          {finished || live ? (
-            <div className="text-3xl font-black tabular-nums">{match.scoreHome ?? 0}<span className="text-slate-500 mx-1">:</span>{match.scoreAway ?? 0}</div>
-          ) : (
-            <div className="text-2xl font-black text-amber-400">VS</div>
-          )}
-        </div>
-        <div className="flex-1 flex flex-col items-center gap-2 text-center">
-          <div className="w-20 h-20 rounded-full bg-slate-800/60 flex items-center justify-center p-3">
-            {match.awayCrest && <img src={match.awayCrest} alt="" className="w-full h-full object-contain drop-shadow-lg" />}
-          </div>
-          <span className="font-bold text-sm leading-tight">{match.awayTeam}</span>
-        </div>
-      </div>
-
-      {/* Barra de distribuição de palpites (após kickoff) */}
-      {split && (
-        <div className="px-4 pb-3">
-          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-            <span>{split.pctA}% · {match.homeTeam}</span>
-            <span className="text-slate-500">Palpites da galera</span>
-            <span>{match.awayTeam} · {split.pctB}%</span>
-          </div>
-          <div className="h-2 rounded-full overflow-hidden bg-slate-700 flex">
-            <div className="bg-purple-500" style={{ width: `${split.pctA}%` }} />
-            <div className="bg-slate-500" style={{ width: `${100 - split.pctA - split.pctB}%` }} />
-            <div className="bg-sky-500" style={{ width: `${split.pctB}%` }} />
-          </div>
-        </div>
-      )}
-
-      {!split && (
-        <div className="px-4 pb-2 text-center">
-          <span className="text-[10px] text-slate-400">{kickoffStr}</span>
-        </div>
-      )}
+      {/* ===== FIM DO POSTER ===== */}
 
       {/* Apostas */}
-      <div className="px-4 py-3 border-t border-amber-500/20 bg-slate-900/40 flex flex-col gap-3">
+      <div className="px-4 py-3 bg-slate-900 flex flex-col gap-3">
         {!editable && !finished && (
           <p className="text-xs text-rose-400">{live ? 'Jogo a decorrer' : locked ? 'Semana fechada' : 'Jogo já começou'} — palpites bloqueados.</p>
         )}
