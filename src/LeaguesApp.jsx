@@ -196,7 +196,7 @@ export default function LeaguesApp({ onBackToArchive }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-stone-100 pb-10">
+    <div className="min-h-screen bg-slate-950 text-stone-100 pb-24">
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-slate-600 px-4 py-2 rounded-lg text-sm shadow-lg">
           {toast}
@@ -205,24 +205,10 @@ export default function LeaguesApp({ onBackToArchive }) {
 
       <div className="max-w-2xl mx-auto px-4 pt-4">
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Trophy className="text-amber-400" size={22} />
             <h1 className="font-bold text-lg">PTZ Bet</h1>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-slate-400">
-            <button
-              onClick={() => { setProfilePlayer(myName); setView('profile'); }}
-              className="flex items-center gap-1 hover:text-amber-300 transition"
-            >
-              <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-900 font-bold flex items-center justify-center text-xs capitalize">
-                {myName.charAt(0)}
-              </span>
-              <span className="capitalize">{myName}</span>
-            </button>
-            {onBackToArchive && (
-              <button onClick={onBackToArchive} className="underline hover:text-amber-300">Mundial</button>
-            )}
           </div>
         </div>
 
@@ -233,8 +219,8 @@ export default function LeaguesApp({ onBackToArchive }) {
             tournaments={tournaments}
             weeks={weeks}
             allPicks={allPicks}
-            onBack={() => setView('tournaments')}
             onOpenPlayer={(p) => setProfilePlayer(p)}
+            onBackToArchive={onBackToArchive}
           />
         )}
 
@@ -260,8 +246,45 @@ export default function LeaguesApp({ onBackToArchive }) {
           />
         )}
       </div>
+
+      <BottomNav
+        active={view}
+        onHome={() => setView('tournaments')}
+        onProfile={() => { setProfilePlayer(myName); setView('profile'); }}
+      />
     </div>
   );
+}
+
+// ---- Barra de navegação inferior ----
+function BottomNav({ active, onHome, onProfile }) {
+  const items = [
+    { id: 'home', icon: <HomeIcon />, onClick: onHome, activeWhen: ['tournaments', 'tournament'] },
+    { id: 'profile', icon: <UserIcon />, onClick: onProfile, activeWhen: ['profile'] },
+  ];
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800">
+      <div className="max-w-2xl mx-auto flex items-center justify-around px-6 py-2">
+        {items.map(item => {
+          const isActive = item.activeWhen.includes(active);
+          return (
+            <button key={item.id} onClick={item.onClick} className={`flex flex-col items-center py-2 px-8 rounded-xl transition ${isActive ? 'text-amber-400' : 'text-slate-500'}`}>
+              <div className={`w-11 h-11 rounded-full flex items-center justify-center transition ${isActive ? 'bg-amber-500/20' : ''}`}>
+                {item.icon}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function HomeIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5L12 3l9 6.5"/><path d="M5 10v10h14V10"/></svg>;
+}
+function UserIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0114 0v1"/></svg>;
 }
 
 // ---- Lista de torneios ----
@@ -269,19 +292,49 @@ function TournamentList({ tournaments, weeks, onOpen }) {
   const active = tournaments.filter(t => t.status === 'active');
   const finished = tournaments.filter(t => t.status === 'finished');
 
+  const LEAGUE_STYLE = {
+    liga_principal: {
+      emblem: 'https://crests.football-data.org/PL.png',
+      gradient: 'from-purple-600/40 via-indigo-700/30 to-slate-900',
+      accent: 'text-purple-300',
+    },
+    champions: {
+      emblem: 'https://crests.football-data.org/CL.png',
+      gradient: 'from-blue-700/40 via-blue-900/30 to-slate-900',
+      accent: 'text-blue-300',
+    },
+  };
+
   const TournamentCard = ({ t }) => {
-    const typeIcon = t.type === 'league' ? '⚽' : t.type === 'champions' ? '🏆' : '🎯';
+    const style = LEAGUE_STYLE[t.id] || LEAGUE_STYLE[t.type] || {
+      emblem: '', gradient: 'from-slate-700/40 to-slate-900', accent: 'text-amber-300',
+    };
+    const typeLabel = t.type === 'league' ? 'Liga' : t.type === 'champions' ? 'Champions' : 'Mini-torneio';
+    // conta jogos desta semana
+    const tWeeks = Object.values(weeks).filter(w => w.tournamentId === t.id);
+    const now = Date.now();
+    const activeWeek = tWeeks.find(w => new Date(w.dateTo).getTime() > now - 24 * 3600 * 1000);
+
     return (
       <button
         onClick={() => onOpen(t)}
-        className="w-full text-left rounded-xl border border-slate-700 bg-slate-800/60 p-4 hover:border-amber-500/50 transition"
+        className={`w-full text-left rounded-2xl overflow-hidden border border-slate-700 bg-gradient-to-br ${style.gradient} p-5 hover:border-amber-500/50 transition group relative`}
       >
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-bold text-stone-100">{typeIcon} {t.name}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{t.season}</p>
+        <div className="flex items-center gap-4">
+          {style.emblem ? (
+            <img src={style.emblem} alt="" className="w-14 h-14 object-contain drop-shadow-lg" />
+          ) : (
+            <div className="w-14 h-14 rounded-xl bg-slate-800 flex items-center justify-center text-2xl">🎯</div>
+          )}
+          <div className="flex-1">
+            <p className={`text-[10px] font-bold uppercase tracking-wider ${style.accent}`}>{typeLabel}</p>
+            <p className="font-bold text-lg text-stone-100">{t.name}</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {t.season}
+              {activeWeek && <> · {activeWeek.matches.length} jogos esta semana</>}
+            </p>
           </div>
-          <ChevronDown className="-rotate-90 text-slate-500" size={18} />
+          <ChevronDown className="-rotate-90 text-slate-500 group-hover:text-amber-400 transition" size={20} />
         </div>
       </button>
     );
@@ -289,13 +342,13 @@ function TournamentList({ tournaments, weeks, onOpen }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-bold text-slate-400 uppercase">Activos</p>
+      <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Torneios activos</p>
       {active.length === 0 && <p className="text-sm text-slate-500">Ainda não há torneios activos.</p>}
       {active.map(t => <TournamentCard key={t.id} t={t} />)}
 
       {finished.length > 0 && (
         <>
-          <p className="text-xs font-bold text-slate-400 uppercase mt-3">Terminados</p>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mt-4">Terminados</p>
           {finished.map(t => <TournamentCard key={t.id} t={t} />)}
         </>
       )}
@@ -427,18 +480,32 @@ function LeagueMatchCard({ match, weekId, pick, locked, myName, allPicks, onSave
     <div className="rounded-xl border border-slate-700 bg-slate-800/60 overflow-hidden">
       {/* Cabeçalho */}
       <div className="px-4 py-2 flex items-center justify-between border-b border-slate-700/50">
-        <span className="text-[10px] uppercase tracking-wide text-slate-500">{match.leagueName}{match.isClassic ? ' ⭐' : ''}</span>
+        <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-slate-500">
+          {match.leagueEmblem && <img src={match.leagueEmblem} alt="" className="w-4 h-4 object-contain" />}
+          {match.leagueName}{match.isClassic ? ' ⭐' : ''}
+        </span>
         <span className="text-[10px] text-slate-500">{kickoffStr}</span>
       </div>
 
-      {/* Equipas e placar */}
-      <div className="px-4 py-3 flex items-center justify-between">
-        <span className="font-bold text-sm flex-1">{match.homeTeam}</span>
-        <span className="px-3 text-center tabular-nums font-bold">
-          {finished || live ? `${match.scoreHome ?? 0} - ${match.scoreAway ?? 0}` : 'vs'}
-          {live && <span className="block text-[10px] text-rose-400">AO VIVO</span>}
-        </span>
-        <span className="font-bold text-sm flex-1 text-right">{match.awayTeam}</span>
+      {/* Equipas e placar — com escudos */}
+      <div className="px-4 py-4 flex items-center justify-between gap-2">
+        <div className="flex-1 flex flex-col items-center gap-2 text-center">
+          {match.homeCrest && <img src={match.homeCrest} alt="" className="w-12 h-12 object-contain" />}
+          <span className="font-bold text-xs leading-tight">{match.homeTeam}</span>
+        </div>
+        <div className="px-2 text-center min-w-[70px]">
+          {finished || live ? (
+            <div className="text-2xl font-bold tabular-nums">{match.scoreHome ?? 0}<span className="text-slate-600 mx-1">:</span>{match.scoreAway ?? 0}</div>
+          ) : (
+            <div className="text-sm font-bold text-slate-500">VS</div>
+          )}
+          {live && <span className="block text-[10px] text-rose-400 font-bold mt-0.5">🔴 AO VIVO</span>}
+          {finished && <span className="block text-[10px] text-slate-500 mt-0.5">Final</span>}
+        </div>
+        <div className="flex-1 flex flex-col items-center gap-2 text-center">
+          {match.awayCrest && <img src={match.awayCrest} alt="" className="w-12 h-12 object-contain" />}
+          <span className="font-bold text-xs leading-tight">{match.awayTeam}</span>
+        </div>
       </div>
 
       {/* Apostas */}
@@ -639,7 +706,7 @@ function StandingsView({ weeks, allPicks, myName }) {
 }
 
 // ---- Página de perfil do jogador ----
-function ProfileView({ player, myName, tournaments, weeks, allPicks, onBack, onOpenPlayer }) {
+function ProfileView({ player, myName, tournaments, weeks, allPicks, onOpenPlayer, onBackToArchive }) {
   const playerData = allPicks.find(p => p.name === player);
 
   // Estatísticas globais e por torneio
@@ -693,10 +760,6 @@ function ProfileView({ player, myName, tournaments, weeks, allPicks, onBack, onO
 
   return (
     <div className="flex flex-col gap-4">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-400 hover:text-amber-300 w-fit">
-        <ArrowLeft size={16} /> Voltar
-      </button>
-
       {/* Cartão do perfil */}
       <div className="rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 p-6 flex items-center gap-4">
         <div className="w-16 h-16 rounded-full bg-amber-500 text-slate-900 font-bold flex items-center justify-center text-2xl capitalize">
@@ -748,28 +811,25 @@ function ProfileView({ player, myName, tournaments, weeks, allPicks, onBack, onO
         </div>
       </div>
 
-      {/* Ranking global */}
-      <div>
-        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Classificação global</p>
-        <div className="flex flex-col gap-1.5">
-          {globalRanking.map((r, i) => {
-            const medal = ['🥇', '🥈', '🥉'][i] || `${i + 1}`;
-            return (
-              <button
-                key={r.name}
-                onClick={() => onOpenPlayer(r.name)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 border transition ${
-                  r.name === player ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-700 bg-slate-800/40 hover:border-slate-600'
-                }`}
-              >
-                <span className="w-5 text-center text-sm">{medal}</span>
-                <span className="flex-1 text-left text-sm font-bold capitalize">{r.name}</span>
-                <span className="text-sm font-bold tabular-nums text-slate-300">{r.total}</span>
-              </button>
-            );
-          })}
+      {/* Arquivo do Mundial (só no próprio perfil) */}
+      {player === myName && onBackToArchive && (
+        <div>
+          <p className="text-xs font-bold text-slate-400 uppercase mb-2">Arquivo</p>
+          <button
+            onClick={onBackToArchive}
+            className="w-full rounded-xl border border-slate-700 bg-slate-800/40 p-4 flex items-center justify-between hover:border-amber-500/50 transition"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🏆</span>
+              <div className="text-left">
+                <p className="font-bold text-sm">Mundial 2026</p>
+                <p className="text-xs text-slate-400">Ver classificação e histórico</p>
+              </div>
+            </div>
+            <ChevronDown className="-rotate-90 text-slate-500" size={18} />
+          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }
