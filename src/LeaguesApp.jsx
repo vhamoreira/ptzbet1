@@ -49,7 +49,7 @@ function outcomeOf(a, b) {
   return 'D';
 }
 
-// Pontos: exato +5, VED +3, ambas marcam +2
+// Pontos: exato +5, VED +3, ambas marcam +2. Jogo highlight = pontos a dobrar.
 function pointsFor(pick, match) {
   if (!pick || !match || match.status !== 'FINISHED') return { exact: 0, outcome: 0, both: 0, total: 0 };
   const sA = match.scoreHome, sB = match.scoreAway;
@@ -61,7 +61,9 @@ function pointsFor(pick, match) {
       Number(pick.scoreA) === Number(sA) && Number(pick.scoreB) === Number(sB)) exact = 5;
   const actualBoth = sA > 0 && sB > 0;
   if (pick.bothScore != null && pick.bothScore === actualBoth) both = 2;
-  return { exact, outcome, both, total: exact + outcome + both };
+
+  const mult = match.isHighlight ? 2 : 1;
+  return { exact: exact * mult, outcome: outcome * mult, both: both * mult, total: (exact + outcome + both) * mult };
 }
 
 export default function LeaguesApp({ onBackToArchive }) {
@@ -416,6 +418,9 @@ function WeekView({ week, myName, myPicks, allPicks, onSavePick }) {
   const locked = new Date(week.deadline).getTime() <= now;
   const weekPicks = myPicks[week.id] || {};
 
+  const highlightMatch = week.matches.find(m => m.isHighlight);
+  const normalMatches = week.matches.filter(m => !m.isHighlight);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between text-xs">
@@ -427,7 +432,20 @@ function WeekView({ week, myName, myPicks, allPicks, onSavePick }) {
         </span>
       </div>
 
-      {week.matches.map(m => (
+      {/* Jogo da Semana em destaque */}
+      {highlightMatch && (
+        <HighlightCard
+          match={highlightMatch}
+          weekId={week.id}
+          pick={weekPicks[highlightMatch.id]}
+          locked={locked}
+          myName={myName}
+          allPicks={allPicks}
+          onSavePick={onSavePick}
+        />
+      )}
+
+      {normalMatches.map(m => (
         <LeagueMatchCard
           key={m.id}
           match={m}
@@ -439,6 +457,105 @@ function WeekView({ week, myName, myPicks, allPicks, onSavePick }) {
           onSavePick={onSavePick}
         />
       ))}
+    </div>
+  );
+}
+
+// ---- Card do Jogo da Semana (highlight, pontos a dobrar) ----
+function HighlightCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }) {
+  const [draft, setDraft] = useState(pick || { outcome: '', scoreA: '', scoreB: '', bothScore: null });
+  useEffect(() => { if (pick) setDraft(pick); }, [pick]);
+
+  const finished = match.status === 'FINISHED';
+  const live = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+  const kickedOff = new Date(match.kickoff).getTime() <= Date.now();
+  const editable = !locked && !kickedOff;
+  const pts = finished ? pointsFor(pick, match) : null;
+
+  function update(partial) {
+    const next = { ...draft, ...partial };
+    const a = next.scoreA !== '' && next.scoreA != null ? Number(next.scoreA) : null;
+    const b = next.scoreB !== '' && next.scoreB != null ? Number(next.scoreB) : null;
+    if (a != null && b != null) {
+      next.outcome = a > b ? 'A' : a < b ? 'B' : 'D';
+      next.bothScore = a > 0 && b > 0;
+    }
+    setDraft(next);
+    onSavePick(weekId, match.id, next);
+  }
+
+  const kickoffStr = new Date(match.kickoff).toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <div className="rounded-2xl overflow-hidden border-2 border-amber-500/60 bg-gradient-to-br from-purple-700/40 via-indigo-800/30 to-slate-900 relative shadow-lg shadow-amber-500/10">
+      {/* Faixa de topo */}
+      <div className="px-4 py-2.5 flex items-center justify-between bg-gradient-to-r from-amber-500/20 to-transparent border-b border-amber-500/30">
+        <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-300">
+          🔥 Jogo da Semana
+        </span>
+        <span className="text-[10px] font-bold text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded-full">PONTOS A DOBRAR</span>
+      </div>
+
+      {/* Equipas com escudos grandes */}
+      <div className="px-4 py-5 flex items-center justify-between gap-2">
+        <div className="flex-1 flex flex-col items-center gap-2 text-center">
+          {match.homeCrest && <img src={match.homeCrest} alt="" className="w-16 h-16 object-contain drop-shadow-lg" />}
+          <span className="font-bold text-sm leading-tight">{match.homeTeam}</span>
+        </div>
+        <div className="px-2 text-center min-w-[80px]">
+          {finished || live ? (
+            <div className="text-3xl font-black tabular-nums">{match.scoreHome ?? 0}<span className="text-slate-500 mx-1">:</span>{match.scoreAway ?? 0}</div>
+          ) : (
+            <div className="text-2xl font-black text-amber-400">VS</div>
+          )}
+          {live && <span className="block text-[10px] text-rose-400 font-bold mt-1">🔴 AO VIVO</span>}
+          <span className="block text-[10px] text-slate-400 mt-1">{match.leagueName}</span>
+        </div>
+        <div className="flex-1 flex flex-col items-center gap-2 text-center">
+          {match.awayCrest && <img src={match.awayCrest} alt="" className="w-16 h-16 object-contain drop-shadow-lg" />}
+          <span className="font-bold text-sm leading-tight">{match.awayTeam}</span>
+        </div>
+      </div>
+
+      <div className="px-4 pb-2 text-center">
+        <span className="text-[10px] text-slate-400">{kickoffStr}</span>
+      </div>
+
+      {/* Apostas */}
+      <div className="px-4 py-3 border-t border-amber-500/20 bg-slate-900/40 flex flex-col gap-3">
+        {!editable && !finished && (
+          <p className="text-xs text-rose-400">{live ? 'Jogo a decorrer' : locked ? 'Semana fechada' : 'Jogo já começou'} — palpites bloqueados.</p>
+        )}
+        <div>
+          <p className="text-xs text-slate-300 mb-1.5 font-bold">Resultado {finished && pts ? <span className={pts.outcome ? 'text-emerald-400' : 'text-rose-400'}>({pts.outcome})</span> : <span className="text-amber-400">+6 pts</span>}</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {[['A', '1'], ['D', 'X'], ['B', '2']].map(([val, label]) => (
+              <button key={val} disabled={!editable} onClick={() => editable && update({ outcome: val })}
+                className={`rounded-lg py-2 text-sm font-bold transition ${draft.outcome === val ? 'bg-amber-500 text-slate-900' : editable ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-700/50 text-slate-500'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-xs text-slate-300 mb-1.5 font-bold">Resultado exato {finished && pts ? <span className={pts.exact ? 'text-emerald-400' : 'text-rose-400'}>({pts.exact})</span> : <span className="text-amber-400">+10 pts</span>}</p>
+          <div className="flex items-center gap-2">
+            <input type="number" min="0" disabled={!editable} value={draft.scoreA ?? ''} onChange={e => update({ scoreA: e.target.value })}
+              className="w-14 text-center rounded-md bg-slate-700 border border-slate-600 text-stone-100 py-1.5 disabled:opacity-50" />
+            <span className="text-slate-500">-</span>
+            <input type="number" min="0" disabled={!editable} value={draft.scoreB ?? ''} onChange={e => update({ scoreB: e.target.value })}
+              className="w-14 text-center rounded-md bg-slate-700 border border-slate-600 text-stone-100 py-1.5 disabled:opacity-50" />
+          </div>
+        </div>
+        <div>
+          <p className="text-xs text-slate-300 mb-1.5 font-bold">Ambas marcam {finished && pts ? <span className={pts.both ? 'text-emerald-400' : 'text-rose-400'}>({pts.both})</span> : <span className="text-amber-400">+4 pts</span>}</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {[[true, 'Sim'], [false, 'Não']].map(([val, label]) => (
+              <button key={label} disabled={!editable} onClick={() => editable && update({ bothScore: val })}
+                className={`rounded-lg py-2 text-sm font-bold transition ${draft.bothScore === val ? 'bg-amber-500 text-slate-900' : editable ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-700/50 text-slate-500'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+        {finished && pts && <p className="text-sm text-center font-black text-amber-300">Total: +{pts.total} pts 🔥</p>}
+      </div>
     </div>
   );
 }
