@@ -51,19 +51,34 @@ function outcomeOf(a, b) {
 
 // Pontos: exato +5, VED +3, ambas marcam +2. Jogo highlight = pontos a dobrar.
 function pointsFor(pick, match) {
-  if (!pick || !match || match.status !== 'FINISHED') return { exact: 0, outcome: 0, both: 0, total: 0 };
+  if (!pick || !match || match.status !== 'FINISHED') return { exact: 0, outcome: 0, both: 0, total: 0, pleno: false };
   const sA = match.scoreHome, sB = match.scoreAway;
-  if (sA == null || sB == null) return { exact: 0, outcome: 0, both: 0, total: 0 };
+  if (sA == null || sB == null) return { exact: 0, outcome: 0, both: 0, total: 0, pleno: false };
 
   let exact = 0, outcome = 0, both = 0;
-  if (pick.outcome === outcomeOf(sA, sB)) outcome = 3;
-  if (pick.scoreA !== '' && pick.scoreA != null && pick.scoreB !== '' && pick.scoreB != null &&
-      Number(pick.scoreA) === Number(sA) && Number(pick.scoreB) === Number(sB)) exact = 5;
+  const gotOutcome = pick.outcome === outcomeOf(sA, sB);
+  if (gotOutcome) outcome = 3;
+  const gotExact = pick.scoreA !== '' && pick.scoreA != null && pick.scoreB !== '' && pick.scoreB != null &&
+      Number(pick.scoreA) === Number(sA) && Number(pick.scoreB) === Number(sB);
+  if (gotExact) exact = 5;
   const actualBoth = sA > 0 && sB > 0;
-  if (pick.bothScore != null && pick.bothScore === actualBoth) both = 2;
+  const gotBoth = pick.bothScore != null && pick.bothScore === actualBoth;
+  if (gotBoth) both = 2;
 
-  const mult = match.isHighlight ? 2 : 1;
-  return { exact: exact * mult, outcome: outcome * mult, both: both * mult, total: (exact + outcome + both) * mult };
+  // PLENO = acertou os 3 mercados (exato + 1X2 + ambas marcam). Dá pontos a dobrar.
+  const pleno = gotExact && gotOutcome && gotBoth;
+
+  const highlightMult = match.isHighlight ? 2 : 1;
+  const plenoMult = pleno ? 2 : 1;
+  const mult = highlightMult * plenoMult;
+
+  return {
+    exact: exact * mult, outcome: outcome * mult, both: both * mult,
+    total: (exact + outcome + both) * mult,
+    pleno,
+    // flags de acerto individuais (para os rankings)
+    gotExact, gotOutcome, gotBoth,
+  };
 }
 
 // Um jogo considera-se "com palpite" se tiver pelo menos o 1X2 escolhido.
@@ -382,7 +397,7 @@ function SettingsIcon() {
 // ---- HOMEPAGE: selector de dias + jogos agrupados por torneio ----
 function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick }) {
   const now = Date.now();
-  const [selectedDay, setSelectedDay] = useState(null); // 'YYYY-MM-DD' ou null = todos
+  const [selectedDay, setSelectedDay] = useState('all'); // 'all' = todos, ou 'YYYY-MM-DD'
 
   // Secções (torneios com semana actual)
   const sections = useMemo(() => {
@@ -417,13 +432,7 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
     return [...set].sort();
   }, [allMatches]);
 
-  // Selecciona por defeito o próximo dia com jogos
-  useEffect(() => {
-    if (selectedDay || days.length === 0) return;
-    const todayStr = new Date().toISOString().split('T')[0];
-    const upcoming = days.find(d => d >= todayStr) || days[0];
-    setSelectedDay(upcoming);
-  }, [days, selectedDay]);
+  const dayFilter = selectedDay === 'all' ? null : selectedDay;
 
   const highlight = useMemo(() => {
     for (const s of sections) {
@@ -474,8 +483,8 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
       {days.length > 0 && (
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
           <button
-            onClick={() => setSelectedDay(null)}
-            className={`shrink-0 px-3 py-2 rounded-full text-xs font-bold transition ${selectedDay === null ? 'bg-lime-400 text-slate-900' : 'bg-slate-800 text-slate-400'}`}
+            onClick={() => setSelectedDay('all')}
+            className={`shrink-0 px-4 py-2 rounded-full text-xs font-bold transition ${selectedDay === 'all' ? 'bg-lime-400 text-slate-900' : 'bg-slate-800 text-slate-400'}`}
           >Todos</button>
           {days.map(iso => {
             const { weekday, day } = dayLabel(iso);
@@ -497,7 +506,7 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
       )}
 
       {/* Jogo da Semana (só quando não filtrado, ou quando o highlight é nesse dia) */}
-      {highlight && (selectedDay === null || highlight.match.kickoff?.startsWith(selectedDay)) && (
+      {highlight && (!dayFilter || highlight.match.kickoff?.startsWith(dayFilter)) && (
         <div>
           <SectionLabel icon="🔥" text="Jogo da Semana" />
           <HighlightCard
@@ -518,7 +527,7 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
         const weekPicks = myPicks[week.id] || {};
         const { missing, open } = weekMissing(week, weekPicks);
         let matches = week.matches.filter(m => !m.isHighlight);
-        if (selectedDay) matches = matches.filter(m => m.kickoff?.startsWith(selectedDay));
+        if (dayFilter) matches = matches.filter(m => m.kickoff?.startsWith(dayFilter));
         if (matches.length === 0) return null;
         return (
           <div key={tournament.id}>
@@ -1169,39 +1178,70 @@ function HistoryView({ weeks, myName, myPicks, allPicks }) {
 
 // ---- Classificação do torneio ----
 function StandingsView({ weeks, allPicks, myName }) {
-  const rows = useMemo(() => {
+  const [rankTab, setRankTab] = useState('geral');
+
+  const stats = useMemo(() => {
     const finishedWeeks = weeks.filter(w => new Date(w.dateTo).getTime() < Date.now());
     return allPicks.map(p => {
-      let total = 0, exact = 0, outcome = 0, both = 0;
+      let total = 0, plenos = 0, exatos = 0, resultados = 0, golos = 0;
       for (const week of finishedWeeks) {
         for (const m of week.matches) {
           const pts = pointsFor(p.picks?.[week.id]?.[m.id], m);
           total += pts.total;
-          if (pts.exact) exact++;
-          if (pts.outcome) outcome++;
-          if (pts.both) both++;
+          if (pts.pleno) plenos++;
+          if (pts.gotExact) exatos++;
+          if (pts.gotOutcome) resultados++;
+          if (pts.gotBoth) golos++;
         }
       }
-      return { name: p.name, total, exact, outcome, both };
-    }).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+      return { name: p.name, total, plenos, exatos, resultados, golos };
+    });
   }, [weeks, allPicks]);
 
+  const TABS = [
+    { id: 'geral', label: 'Geral', key: 'total', desc: 'Total de pontos', suffix: 'pts' },
+    { id: 'plenos', label: 'Plenos', key: 'plenos', desc: 'Acertar tudo (2×)', suffix: '' },
+    { id: 'exatos', label: 'Exatos', key: 'exatos', desc: 'Resultado exato', suffix: '' },
+    { id: 'resultados', label: 'Resultados', key: 'resultados', desc: '1X2', suffix: '' },
+    { id: 'golos', label: 'Golos', key: 'golos', desc: 'Ambas marcam', suffix: '' },
+  ];
+  const activeTab = TABS.find(t => t.id === rankTab);
+  const rows = [...stats].sort((a, b) => b[activeTab.key] - a[activeTab.key] || a.name.localeCompare(b.name));
+
   return (
-    <div className="flex flex-col gap-2">
-      {rows.map((row, i) => {
-        const medal = ['🥇', '🥈', '🥉'][i] || `${i + 1}`;
-        return (
-          <div key={row.name} className={`flex items-center gap-3 rounded-xl px-3 py-3 border ${row.name === myName ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-700 bg-slate-800/40'}`}>
-            <span className="w-6 text-center font-bold">{medal}</span>
-            <div className="flex-1">
-              <p className="font-bold text-sm capitalize">{row.name}</p>
-              <p className="text-xs text-slate-400">{row.exact} exatos · {row.outcome} V/E/D · {row.both} ambas marcam</p>
+    <div className="flex flex-col gap-3">
+      {/* Tabs de ranking */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setRankTab(t.id)}
+            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition ${rankTab === t.id ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}
+          >{t.label}</button>
+        ))}
+      </div>
+
+      <p className="text-[11px] text-slate-500 -mt-1">{activeTab.desc}</p>
+
+      <div className="flex flex-col gap-2">
+        {rows.map((row, i) => {
+          const medal = ['🥇', '🥈', '🥉'][i] || `${i + 1}`;
+          const val = row[activeTab.key];
+          return (
+            <div key={row.name} className={`flex items-center gap-3 rounded-xl px-3 py-3 border ${row.name === myName ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-700 bg-slate-800/40'}`}>
+              <span className="w-6 text-center font-bold">{medal}</span>
+              <div className="flex-1">
+                <p className="font-bold text-sm capitalize">{row.name}</p>
+                {rankTab === 'geral' && (
+                  <p className="text-xs text-slate-400">{row.plenos} plenos · {row.exatos} exatos · {row.resultados} resultados · {row.golos} golos</p>
+                )}
+              </div>
+              <span className="px-3 py-1 rounded-lg bg-slate-700 font-bold tabular-nums">{val}{activeTab.suffix ? ` ${activeTab.suffix}` : ''}</span>
             </div>
-            <span className="px-3 py-1 rounded-lg bg-slate-700 font-bold tabular-nums">{row.total}</span>
-          </div>
-        );
-      })}
-      {rows.length === 0 && <p className="text-sm text-slate-500 text-center py-8">Sem dados ainda.</p>}
+          );
+        })}
+        {rows.length === 0 && <p className="text-sm text-slate-500 text-center py-8">Sem dados ainda.</p>}
+      </div>
     </div>
   );
 }
@@ -1226,9 +1266,9 @@ function ProfileView({ player, myName, tournaments, weeks, allPicks, onOpenPlaye
           if (pick) tGames++;
           const pts = pointsFor(pick, m);
           tTotal += pts.total;
-          if (pts.exact) { tExact++; tHits++; }
-          if (pts.outcome) { tOutcome++; tHits++; }
-          if (pts.both) { tBoth++; tHits++; }
+          if (pts.gotExact) { tExact++; tHits++; }
+          if (pts.gotOutcome) { tOutcome++; tHits++; }
+          if (pts.gotBoth) { tBoth++; tHits++; }
         }
       }
       if (tGames > 0 || tTotal > 0) {
