@@ -205,6 +205,24 @@ export default function LeaguesApp({ onBackToArchive }) {
         </div>
       )}
 
+      {/* Cabeçalho global */}
+      <div className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur border-b border-slate-800/60">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
+              <Trophy className="text-slate-900" size={18} />
+            </div>
+            <h1 className="font-black text-lg tracking-tight">PTZ Bet<span className="text-amber-400">+</span></h1>
+          </div>
+          <button
+            onClick={() => { setProfilePlayer(myName); setView('settings'); }}
+            className="w-9 h-9 rounded-full bg-amber-500 text-slate-900 font-bold flex items-center justify-center text-sm capitalize"
+          >
+            {myName.charAt(0)}
+          </button>
+        </div>
+      </div>
+
       <div className="max-w-2xl mx-auto px-4 pt-5">
         {/* HOME — todos os jogos da semana agrupados por torneio */}
         {view === 'home' && (
@@ -600,23 +618,26 @@ function ScoreCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }
 
 // ---- Lista de torneios ----
 function TournamentList({ tournaments, weeks, onOpen, emptyMsg }) {
-  const LEAGUE_STYLE = {
+  const STYLE = {
     liga_principal: {
       emblem: 'https://crests.football-data.org/PL.png',
-      gradient: 'from-purple-600/40 via-indigo-700/30 to-slate-900',
+      card: 'bg-gradient-to-br from-purple-600/40 via-indigo-700/30 to-slate-900',
       accent: 'text-purple-300',
     },
     champions: {
       emblem: 'https://crests.football-data.org/CL.png',
-      gradient: 'from-blue-700/40 via-blue-900/30 to-slate-900',
+      card: 'bg-gradient-to-br from-blue-700/40 via-blue-900/30 to-slate-900',
       accent: 'text-blue-300',
+    },
+    _default: {
+      emblem: '',
+      card: 'bg-gradient-to-br from-slate-700/40 to-slate-900',
+      accent: 'text-amber-300',
     },
   };
 
   const TournamentCard = ({ t }) => {
-    const style = LEAGUE_STYLE[t.id] || LEAGUE_STYLE[t.type] || {
-      emblem: '', gradient: 'from-slate-700/40 to-slate-900', accent: 'text-amber-300',
-    };
+    const style = STYLE[t.id] || STYLE[t.type] || STYLE._default;
     const typeLabel = t.type === 'league' ? 'Liga' : t.type === 'champions' ? 'Champions' : 'Mini-torneio';
     const tWeeks = Object.values(weeks).filter(w => w.tournamentId === t.id);
     const now = Date.now();
@@ -625,7 +646,7 @@ function TournamentList({ tournaments, weeks, onOpen, emptyMsg }) {
     return (
       <button
         onClick={() => onOpen(t)}
-        className={`w-full text-left rounded-2xl overflow-hidden border border-slate-700 bg-gradient-to-br ${style.gradient} p-5 hover:border-amber-500/50 transition group relative`}
+        className={`w-full text-left rounded-2xl overflow-hidden border border-slate-700 ${style.card} p-5 hover:border-amber-500/50 transition group relative`}
       >
         <div className="flex items-center gap-4">
           {style.emblem ? (
@@ -761,13 +782,43 @@ function WeekView({ week, myName, myPicks, allPicks, onSavePick }) {
 // ---- Card do Jogo da Semana (highlight, pontos a dobrar) ----
 function HighlightCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }) {
   const [draft, setDraft] = useState(pick || { outcome: '', scoreA: '', scoreB: '', bothScore: null });
+  const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => { if (pick) setDraft(pick); }, [pick]);
+  useEffect(() => {
+    const iv = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, []);
 
   const finished = match.status === 'FINISHED';
   const live = match.status === 'IN_PLAY' || match.status === 'PAUSED';
-  const kickedOff = new Date(match.kickoff).getTime() <= Date.now();
+  const koMs = new Date(match.kickoff).getTime();
+  const kickedOff = koMs <= nowTick;
   const editable = !locked && !kickedOff;
   const pts = finished ? pointsFor(pick, match) : null;
+
+  // Contagem decrescente até ao jogo
+  const diff = Math.max(0, koMs - nowTick);
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  const secs = Math.floor((diff % 60000) / 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+
+  // Distribuição de palpites (só após kickoff, para não revelar antes)
+  const split = useMemo(() => {
+    if (!kickedOff) return null;
+    let a = 0, d = 0, b = 0;
+    for (const p of allPicks) {
+      const pk = p.picks?.[weekId]?.[match.id];
+      if (!pk?.outcome) continue;
+      if (pk.outcome === 'A') a++;
+      else if (pk.outcome === 'D') d++;
+      else if (pk.outcome === 'B') b++;
+    }
+    const total = a + d + b;
+    if (total === 0) return null;
+    return { a, d, b, total, pctA: Math.round(a / total * 100), pctB: Math.round(b / total * 100) };
+  }, [kickedOff, allPicks, weekId, match.id]);
 
   function update(partial) {
     const next = { ...draft, ...partial };
@@ -793,30 +844,77 @@ function HighlightCard({ match, weekId, pick, locked, myName, allPicks, onSavePi
         <span className="text-[10px] font-bold text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded-full">PONTOS A DOBRAR</span>
       </div>
 
+      {/* Liga */}
+      <div className="pt-4 flex items-center justify-center gap-1.5">
+        {match.leagueEmblem && <img src={match.leagueEmblem} alt="" className="w-4 h-4 object-contain" />}
+        <span className="text-[10px] uppercase tracking-wider text-slate-300">{match.leagueName}</span>
+      </div>
+
+      {/* Contagem decrescente ou estado */}
+      <div className="flex items-center justify-center py-2">
+        {finished ? (
+          <span className="text-[10px] font-bold text-slate-400 bg-slate-700/50 px-3 py-1 rounded-full">TERMINADO</span>
+        ) : live ? (
+          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full">● AO VIVO</span>
+        ) : (
+          <div className="flex items-center gap-1 text-center">
+            {[[pad(days), 'd'], [pad(hours), 'h'], [pad(mins), 'm'], [pad(secs), 's']].map(([v, l], i) => (
+              <React.Fragment key={l}>
+                {i > 0 && <span className="text-slate-600 font-bold">:</span>}
+                <div className="bg-slate-800/80 rounded-lg px-2 py-1 min-w-[34px]">
+                  <span className="block text-sm font-black tabular-nums">{v}</span>
+                  <span className="block text-[8px] text-slate-500 uppercase">{l}</span>
+                </div>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Equipas com escudos grandes */}
-      <div className="px-4 py-5 flex items-center justify-between gap-2">
+      <div className="px-4 py-4 flex items-center justify-between gap-2">
         <div className="flex-1 flex flex-col items-center gap-2 text-center">
-          {match.homeCrest && <img src={match.homeCrest} alt="" className="w-16 h-16 object-contain drop-shadow-lg" />}
+          <div className="w-20 h-20 rounded-full bg-slate-800/60 flex items-center justify-center p-3">
+            {match.homeCrest && <img src={match.homeCrest} alt="" className="w-full h-full object-contain drop-shadow-lg" />}
+          </div>
           <span className="font-bold text-sm leading-tight">{match.homeTeam}</span>
         </div>
-        <div className="px-2 text-center min-w-[80px]">
+        <div className="px-2 text-center min-w-[70px]">
           {finished || live ? (
             <div className="text-3xl font-black tabular-nums">{match.scoreHome ?? 0}<span className="text-slate-500 mx-1">:</span>{match.scoreAway ?? 0}</div>
           ) : (
             <div className="text-2xl font-black text-amber-400">VS</div>
           )}
-          {live && <span className="block text-[10px] text-rose-400 font-bold mt-1">🔴 AO VIVO</span>}
-          <span className="block text-[10px] text-slate-400 mt-1">{match.leagueName}</span>
         </div>
         <div className="flex-1 flex flex-col items-center gap-2 text-center">
-          {match.awayCrest && <img src={match.awayCrest} alt="" className="w-16 h-16 object-contain drop-shadow-lg" />}
+          <div className="w-20 h-20 rounded-full bg-slate-800/60 flex items-center justify-center p-3">
+            {match.awayCrest && <img src={match.awayCrest} alt="" className="w-full h-full object-contain drop-shadow-lg" />}
+          </div>
           <span className="font-bold text-sm leading-tight">{match.awayTeam}</span>
         </div>
       </div>
 
-      <div className="px-4 pb-2 text-center">
-        <span className="text-[10px] text-slate-400">{kickoffStr}</span>
-      </div>
+      {/* Barra de distribuição de palpites (após kickoff) */}
+      {split && (
+        <div className="px-4 pb-3">
+          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+            <span>{split.pctA}% · {match.homeTeam}</span>
+            <span className="text-slate-500">Palpites da galera</span>
+            <span>{match.awayTeam} · {split.pctB}%</span>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden bg-slate-700 flex">
+            <div className="bg-purple-500" style={{ width: `${split.pctA}%` }} />
+            <div className="bg-slate-500" style={{ width: `${100 - split.pctA - split.pctB}%` }} />
+            <div className="bg-sky-500" style={{ width: `${split.pctB}%` }} />
+          </div>
+        </div>
+      )}
+
+      {!split && (
+        <div className="px-4 pb-2 text-center">
+          <span className="text-[10px] text-slate-400">{kickoffStr}</span>
+        </div>
+      )}
 
       {/* Apostas */}
       <div className="px-4 py-3 border-t border-amber-500/20 bg-slate-900/40 flex flex-col gap-3">
