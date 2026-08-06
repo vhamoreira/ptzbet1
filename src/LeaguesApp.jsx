@@ -976,24 +976,57 @@ function HighlightCard({ match, weekId, pick, locked, myName, allPicks, onSavePi
 
   const kickoffStr = new Date(match.kickoff).toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+  // Paleta por liga (cores reais)
+  const LEAGUE_PALETTE = {
+    'Premier League': { c1: '#3d1a78', c2: '#1a0a3d', glowA: 'rgba(139,92,246,0.55)', glowB: 'rgba(56,189,248,0.45)', ring: '#8b5cf6', tint: 'text-purple-300' },
+    'La Liga':        { c1: '#7a1020', c2: '#2a0510', glowA: 'rgba(244,63,94,0.5)',  glowB: 'rgba(251,191,36,0.45)', ring: '#f43f5e', tint: 'text-rose-300' },
+    'Serie A':        { c1: '#0a2a6b', c2: '#050f2a', glowA: 'rgba(59,130,246,0.55)', glowB: 'rgba(34,211,238,0.4)',  ring: '#3b82f6', tint: 'text-blue-300' },
+    'Bundesliga':     { c1: '#7a0a0a', c2: '#2a0505', glowA: 'rgba(239,68,68,0.55)',  glowB: 'rgba(251,146,60,0.45)', ring: '#ef4444', tint: 'text-red-300' },
+    'Liga Portugal':  { c1: '#0a5a3a', c2: '#04241a', glowA: 'rgba(16,185,129,0.5)',  glowB: 'rgba(239,68,68,0.4)',   ring: '#10b981', tint: 'text-emerald-300' },
+  };
+  const pal = LEAGUE_PALETTE[match.leagueName] || { c1: '#312e81', c2: '#0f172a', glowA: 'rgba(168,85,247,0.5)', glowB: 'rgba(56,189,248,0.4)', ring: '#a855f7', tint: 'text-indigo-300' };
+
   return (
-    <div className="rounded-2xl overflow-hidden border-2 border-amber-500/60 relative shadow-xl shadow-amber-500/10">
+    <div className="rounded-2xl overflow-hidden border-2 relative shadow-2xl" style={{ borderColor: pal.ring, boxShadow: `0 10px 40px -8px ${pal.glowA}` }}>
       {/* ===== POSTER CINEMATOGRÁFICO ===== */}
       <div className="relative overflow-hidden">
-        {/* Fundo dramático em camadas */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(168,85,247,0.35),transparent_55%)]" />
+        {/* Fundo: gradiente da liga */}
+        <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${pal.c1} 0%, ${pal.c2} 60%, #020617 100%)` }} />
+        {/* Brilhos radiais fortes */}
+        <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 22% 25%, ${pal.glowA}, transparent 50%)` }} />
+        <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 80% 68%, ${pal.glowB}, transparent 50%)` }} />
+        <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 115%, rgba(245,158,11,0.3), transparent 55%)` }} />
+        {/* Halo central pulsante */}
+        <div className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full blur-3xl opacity-60" style={{ background: pal.glowA }} />
+        {/* Silhueta de estádio (SVG) ao fundo */}
+        <svg className="absolute bottom-0 left-0 right-0 w-full opacity-[0.13]" viewBox="0 0 400 120" preserveAspectRatio="none" style={{ height: '55%' }}>
+          <ellipse cx="200" cy="130" rx="210" ry="60" fill="none" stroke="#fff" strokeWidth="2" />
+          <ellipse cx="200" cy="130" rx="160" ry="44" fill="none" stroke="#fff" strokeWidth="1.5" />
+          <ellipse cx="200" cy="130" rx="110" ry="30" fill="none" stroke="#fff" strokeWidth="1" />
+          <line x1="60" y1="95" x2="60" y2="60" stroke="#fff" strokeWidth="2" />
+          <line x1="140" y1="80" x2="140" y2="42" stroke="#fff" strokeWidth="2" />
+          <line x1="260" y1="80" x2="260" y2="42" stroke="#fff" strokeWidth="2" />
+          <line x1="340" y1="95" x2="340" y2="60" stroke="#fff" strokeWidth="2" />
+          {/* holofotes */}
+          <circle cx="60" cy="58" r="4" fill="#fff" /><circle cx="140" cy="40" r="4" fill="#fff" />
+          <circle cx="260" cy="40" r="4" fill="#fff" /><circle cx="340" cy="58" r="4" fill="#fff" />
+        </svg>
+        {/* feixes de luz dos holofotes */}
+        <div className="absolute inset-0 opacity-20" style={{ background: 'conic-gradient(from 210deg at 15% 8%, transparent 0deg, rgba(255,255,255,0.15) 12deg, transparent 24deg)' }} />
+        <div className="absolute inset-0 opacity-20" style={{ background: 'conic-gradient(from 300deg at 85% 8%, transparent 0deg, rgba(255,255,255,0.15) 12deg, transparent 24deg)' }} />
+        {/* riscas diagonais */}
+        <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'repeating-linear-gradient(115deg, #fff 0, #fff 1px, transparent 1px, transparent 26px)' }} />
+        {/* brilho superior */}
+        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-white/10 to-transparent" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(56,189,248,0.28),transparent_55%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(245,158,11,0.25),transparent_60%)]" />
         {/* riscas diagonais subtis */}
-        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'repeating-linear-gradient(115deg, #fff 0, #fff 1px, transparent 1px, transparent 22px)' }} />
-
         {/* Faixa de topo */}
         <div className="relative px-4 py-2.5 flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-amber-300 drop-shadow">
             🔥 Jogo da Semana
           </span>
-          <span className="text-[9px] font-black text-slate-900 bg-amber-400 px-2 py-0.5 rounded-full tracking-wide">2× PONTOS</span>
+          <span className="text-[9px] font-black text-slate-900 bg-amber-400 px-2 py-0.5 rounded-full tracking-wide shadow-lg shadow-amber-500/40">2× PONTOS</span>
         </div>
 
         {/* Liga */}
@@ -1008,36 +1041,46 @@ function HighlightCard({ match, weekId, pick, locked, myName, allPicks, onSavePi
         </div>
 
         {/* Escudos protagonistas */}
-        <div className="relative px-4 pt-2 pb-4 flex items-stretch justify-between gap-1">
+        <div className="relative px-4 pt-2 pb-3 flex items-stretch justify-between gap-1">
           {/* Casa */}
           <div className="flex-1 flex flex-col items-center gap-2">
             <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-purple-500/30 blur-2xl scale-125" />
-              {match.homeCrest && <img src={match.homeCrest} alt="" className="relative w-24 h-24 object-contain drop-shadow-[0_4px_20px_rgba(0,0,0,0.6)]" />}
+              <div className="absolute inset-0 rounded-full blur-2xl scale-150 animate-pulse" style={{ background: pal.glowA }} />
+              <div className="absolute inset-0 rounded-full blur-md scale-110" style={{ background: 'rgba(255,255,255,0.15)' }} />
+              {match.homeCrest && <img src={match.homeCrest} alt="" className="relative w-24 h-24 object-contain drop-shadow-[0_6px_24px_rgba(0,0,0,0.7)]" />}
             </div>
-            <span className="font-black text-sm leading-tight text-center text-white drop-shadow uppercase tracking-wide">{match.homeTeam}</span>
+            <span className="font-black text-sm leading-tight text-center text-white drop-shadow-lg uppercase tracking-wide">{match.homeTeam}</span>
           </div>
 
-          {/* Centro: VS ou placar + contagem */}
+          {/* Centro: VS ou placar */}
           <div className="flex flex-col items-center justify-center px-1 min-w-[72px]">
             {finished || live ? (
               <div className="text-4xl font-black tabular-nums text-white drop-shadow-lg">{match.scoreHome ?? 0}<span className="text-white/40 mx-0.5">:</span>{match.scoreAway ?? 0}</div>
             ) : (
-              <div className="text-3xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-amber-300 to-amber-500 drop-shadow">VS</div>
+              <div className="text-4xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 drop-shadow-[0_2px_8px_rgba(245,158,11,0.5)]">VS</div>
             )}
-            {live && <span className="mt-1 text-[9px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">● AO VIVO</span>}
+            {live && <span className="mt-1 text-[9px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full animate-pulse">● AO VIVO</span>}
             {finished && <span className="mt-1 text-[9px] font-bold text-white/50 uppercase tracking-wide">Final</span>}
           </div>
 
           {/* Fora */}
           <div className="flex-1 flex flex-col items-center gap-2">
             <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-sky-500/30 blur-2xl scale-125" />
-              {match.awayCrest && <img src={match.awayCrest} alt="" className="relative w-24 h-24 object-contain drop-shadow-[0_4px_20px_rgba(0,0,0,0.6)]" />}
+              <div className="absolute inset-0 rounded-full blur-2xl scale-150 animate-pulse" style={{ background: pal.glowB }} />
+              <div className="absolute inset-0 rounded-full blur-md scale-110" style={{ background: 'rgba(255,255,255,0.15)' }} />
+              {match.awayCrest && <img src={match.awayCrest} alt="" className="relative w-24 h-24 object-contain drop-shadow-[0_6px_24px_rgba(0,0,0,0.7)]" />}
             </div>
-            <span className="font-black text-sm leading-tight text-center text-white drop-shadow uppercase tracking-wide">{match.awayTeam}</span>
+            <span className="font-black text-sm leading-tight text-center text-white drop-shadow-lg uppercase tracking-wide">{match.awayTeam}</span>
           </div>
         </div>
+
+        {/* Estádio */}
+        {match.venue && (
+          <div className="relative flex items-center justify-center gap-1 pb-2">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/50"><path d="M12 21s-6-5.5-6-10a6 6 0 1112 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg>
+            <span className="text-[10px] text-white/60 font-medium tracking-wide">{match.venue}</span>
+          </div>
+        )}
 
         {/* Contagem decrescente / data */}
         {!finished && !live && (
