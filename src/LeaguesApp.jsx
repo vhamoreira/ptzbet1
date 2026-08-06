@@ -490,15 +490,26 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
             const { weekday, day } = dayLabel(iso);
             const isSel = selectedDay === iso;
             const count = allMatches.filter(m => m.kickoff?.startsWith(iso)).length;
+            const isHighlightDay = highlight && highlight.match.kickoff?.startsWith(iso);
+            // Estilo: dia seleccionado (lima) tem prioridade; senão dia do highlight fica dourado
+            const btnClass = isSel
+              ? 'bg-lime-400 text-slate-900'
+              : isHighlightDay
+                ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-slate-900 shadow-lg shadow-amber-500/30'
+                : 'bg-slate-800 text-slate-400';
+            const subClass = isSel ? 'text-slate-700' : isHighlightDay ? 'text-amber-900/80' : 'text-slate-500';
             return (
               <button
                 key={iso}
                 onClick={() => setSelectedDay(iso)}
-                className={`shrink-0 flex flex-col items-center px-3.5 py-1.5 rounded-full transition ${isSel ? 'bg-lime-400 text-slate-900' : 'bg-slate-800 text-slate-400'}`}
+                className={`shrink-0 flex flex-col items-center px-3.5 py-1.5 rounded-full transition relative ${btnClass}`}
               >
+                {isHighlightDay && (
+                  <span className="absolute -top-1 -right-0.5 text-[10px]">🔥</span>
+                )}
                 <span className="text-[9px] font-bold uppercase">{weekday}</span>
                 <span className="text-base font-black leading-none">{day}</span>
-                <span className={`text-[8px] ${isSel ? 'text-slate-700' : 'text-slate-500'}`}>{count} jogo{count !== 1 ? 's' : ''}</span>
+                <span className={`text-[8px] ${subClass}`}>{count} jogo{count !== 1 ? 's' : ''}</span>
               </button>
             );
           })}
