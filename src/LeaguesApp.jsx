@@ -72,7 +72,7 @@ export default function LeaguesApp({ onBackToArchive }) {
   const [nameInput, setNameInput] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const [view, setView] = useState('tournaments'); // tournaments | tournament | profile
+  const [view, setView] = useState('home'); // home | tournaments | tournament | history | settings
   const [profilePlayer, setProfilePlayer] = useState(null);
   const [activeTournament, setActiveTournament] = useState(null);
   const [innerTab, setInnerTab] = useState('current'); // current | history | standings
@@ -205,33 +205,29 @@ export default function LeaguesApp({ onBackToArchive }) {
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto px-4 pt-4">
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <Trophy className="text-amber-400" size={22} />
-            <h1 className="font-bold text-lg">PTZ Bet</h1>
-          </div>
-        </div>
-
-        {view === 'profile' && profilePlayer && (
-          <ProfileView
-            player={profilePlayer}
-            myName={myName}
+      <div className="max-w-2xl mx-auto px-4 pt-5">
+        {/* HOME — todos os jogos da semana agrupados por torneio */}
+        {view === 'home' && (
+          <HomePage
             tournaments={tournaments}
             weeks={weeks}
+            myName={myName}
+            myPicks={myPicks}
             allPicks={allPicks}
-            onOpenPlayer={(p) => setProfilePlayer(p)}
-            onBackToArchive={onBackToArchive}
+            onSavePick={savePick}
           />
         )}
 
+        {/* TORNEIOS — lista para entrar e consultar */}
         {view === 'tournaments' && (
-          <TournamentList
-            tournaments={tournaments}
-            weeks={weeks}
-            onOpen={(t) => { setActiveTournament(t); setView('tournament'); setInnerTab('current'); }}
-          />
+          <>
+            <PageTitle title="Torneios" subtitle="Entra para ver jogos e classificação" />
+            <TournamentList
+              tournaments={tournaments.filter(t => t.status === 'active')}
+              weeks={weeks}
+              onOpen={(t) => { setActiveTournament(t); setView('tournament'); setInnerTab('current'); }}
+            />
+          </>
         )}
 
         {view === 'tournament' && activeTournament && (
@@ -247,33 +243,83 @@ export default function LeaguesApp({ onBackToArchive }) {
             onSavePick={savePick}
           />
         )}
+
+        {/* HISTÓRICO — torneios terminados */}
+        {view === 'history' && (
+          <>
+            <PageTitle title="Histórico" subtitle="Torneios terminados e resultados" />
+            <TournamentList
+              tournaments={tournaments.filter(t => t.status === 'finished')}
+              weeks={weeks}
+              onOpen={(t) => { setActiveTournament(t); setView('tournament'); setInnerTab('standings'); }}
+              emptyMsg="Ainda não há torneios terminados."
+            />
+            {onBackToArchive && (
+              <button
+                onClick={onBackToArchive}
+                className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-800/40 p-4 flex items-center justify-between hover:border-amber-500/50 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🏆</span>
+                  <div className="text-left">
+                    <p className="font-bold text-sm">Mundial 2026</p>
+                    <p className="text-xs text-slate-400">Ver classificação e histórico</p>
+                  </div>
+                </div>
+                <ChevronDown className="-rotate-90 text-slate-500" size={18} />
+              </button>
+            )}
+          </>
+        )}
+
+        {/* DEFINIÇÕES — perfil */}
+        {view === 'settings' && (
+          <ProfileView
+            player={profilePlayer || myName}
+            myName={myName}
+            tournaments={tournaments}
+            weeks={weeks}
+            allPicks={allPicks}
+            onOpenPlayer={(p) => setProfilePlayer(p)}
+            onBackToArchive={onBackToArchive}
+          />
+        )}
       </div>
 
-      <BottomNav
-        active={view}
-        onHome={() => setView('tournaments')}
-        onProfile={() => { setProfilePlayer(myName); setView('profile'); }}
-      />
+      <BottomNav active={view} onNav={(v) => { setProfilePlayer(myName); setView(v); }} />
     </div>
   );
 }
 
-// ---- Barra de navegação inferior ----
-function BottomNav({ active, onHome, onProfile }) {
+// ---- Título de página ----
+function PageTitle({ title, subtitle }) {
+  return (
+    <div className="mb-4">
+      <h1 className="text-2xl font-black">{title}</h1>
+      {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+    </div>
+  );
+}
+
+// ---- Barra de navegação inferior (4 tabs) ----
+function BottomNav({ active, onNav }) {
   const items = [
-    { id: 'home', icon: <HomeIcon />, onClick: onHome, activeWhen: ['tournaments', 'tournament'] },
-    { id: 'profile', icon: <UserIcon />, onClick: onProfile, activeWhen: ['profile'] },
+    { id: 'home', label: 'Início', icon: <HomeIcon />, group: ['home'] },
+    { id: 'tournaments', label: 'Torneios', icon: <TrophyIcon />, group: ['tournaments', 'tournament'] },
+    { id: 'history', label: 'Histórico', icon: <HistoryIcon />, group: ['history'] },
+    { id: 'settings', label: 'Perfil', icon: <SettingsIcon />, group: ['settings'] },
   ];
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800">
-      <div className="max-w-2xl mx-auto flex items-center justify-around px-6 py-2">
+      <div className="max-w-2xl mx-auto flex items-center justify-around px-2 py-1.5">
         {items.map(item => {
-          const isActive = item.activeWhen.includes(active);
+          const isActive = item.group.includes(active);
           return (
-            <button key={item.id} onClick={item.onClick} className={`flex flex-col items-center py-2 px-8 rounded-xl transition ${isActive ? 'text-amber-400' : 'text-slate-500'}`}>
-              <div className={`w-11 h-11 rounded-full flex items-center justify-center transition ${isActive ? 'bg-amber-500/20' : ''}`}>
+            <button key={item.id} onClick={() => onNav(item.id)} className={`flex flex-col items-center gap-0.5 py-1.5 px-4 rounded-xl transition ${isActive ? 'text-amber-400' : 'text-slate-500'}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition ${isActive ? 'bg-amber-500/20' : ''}`}>
                 {item.icon}
               </div>
+              <span className="text-[10px] font-bold">{item.label}</span>
             </button>
           );
         })}
@@ -283,17 +329,277 @@ function BottomNav({ active, onHome, onProfile }) {
 }
 
 function HomeIcon() {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5L12 3l9 6.5"/><path d="M5 10v10h14V10"/></svg>;
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5L12 3l9 6.5"/><path d="M5 10v10h14V10"/></svg>;
 }
-function UserIcon() {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0114 0v1"/></svg>;
+function TrophyIcon() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 4h12v4a6 6 0 01-12 0V4z"/><path d="M6 6H4a2 2 0 002 4M18 6h2a2 2 0 01-2 4M9 18h6M10 14v4M14 14v4M8 21h8"/></svg>;
+}
+function HistoryIcon() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 109-9 9 9 0 00-8 5"/><path d="M3 4v4h4M12 7v5l3 2"/></svg>;
+}
+function SettingsIcon() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0114 0v1"/></svg>;
+}
+
+// ---- HOMEPAGE: todos os jogos da semana agrupados por torneio ----
+function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick }) {
+  const now = Date.now();
+
+  // Para cada torneio activo, encontra a semana actual
+  const sections = useMemo(() => {
+    const out = [];
+    for (const t of tournaments.filter(t => t.status === 'active')) {
+      const tWeeks = Object.values(weeks)
+        .filter(w => w.tournamentId === t.id)
+        .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
+      const current = tWeeks.filter(w => new Date(w.dateTo).getTime() > now - 24 * 3600 * 1000)[0];
+      if (current && current.matches?.length) {
+        out.push({ tournament: t, week: current });
+      }
+    }
+    return out;
+  }, [tournaments, weeks, now]);
+
+  // Jogo da semana (highlight) — procura em todas as secções
+  const highlight = useMemo(() => {
+    for (const s of sections) {
+      const h = s.week.matches.find(m => m.isHighlight);
+      if (h) return { match: h, week: s.week };
+    }
+    return null;
+  }, [sections]);
+
+  const today = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black">Jogos da Semana</h1>
+          <p className="text-xs text-slate-400 mt-0.5 capitalize">{today}</p>
+        </div>
+      </div>
+
+      {sections.length === 0 && (
+        <p className="text-sm text-slate-500 text-center py-12">Ainda não há jogos definidos para esta semana.</p>
+      )}
+
+      {/* Jogo da Semana */}
+      {highlight && (
+        <div>
+          <SectionLabel icon="🔥" text="Jogo da Semana" />
+          <HighlightCard
+            match={highlight.match}
+            weekId={highlight.week.id}
+            pick={(myPicks[highlight.week.id] || {})[highlight.match.id]}
+            locked={new Date(highlight.week.deadline).getTime() <= now}
+            myName={myName}
+            allPicks={allPicks}
+            onSavePick={onSavePick}
+          />
+        </div>
+      )}
+
+      {/* Secções por torneio */}
+      {sections.map(({ tournament, week }) => {
+        const locked = new Date(week.deadline).getTime() <= now;
+        const weekPicks = myPicks[week.id] || {};
+        const normalMatches = week.matches.filter(m => !m.isHighlight);
+        if (normalMatches.length === 0) return null;
+        return (
+          <div key={tournament.id}>
+            <div className="flex items-center justify-between mb-2">
+              <SectionLabel emblem={LEAGUE_EMBLEM_BY_ID[tournament.id]} text={tournament.name} />
+              <span className={`text-[10px] font-bold ${locked ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {locked ? '🔒 Fechado' : `Fecha ${new Date(week.deadline).toLocaleDateString('pt-PT', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2.5">
+              {normalMatches.map(m => (
+                <ScoreCard
+                  key={m.id}
+                  match={m}
+                  weekId={week.id}
+                  pick={weekPicks[m.id]}
+                  locked={locked}
+                  myName={myName}
+                  allPicks={allPicks}
+                  onSavePick={onSavePick}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const LEAGUE_EMBLEM_BY_ID = {
+  liga_principal: 'https://crests.football-data.org/PL.png',
+  champions: 'https://crests.football-data.org/CL.png',
+};
+
+function SectionLabel({ icon, emblem, text }) {
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      {emblem ? <img src={emblem} alt="" className="w-5 h-5 object-contain" /> : icon ? <span>{icon}</span> : null}
+      <span className="text-sm font-bold text-slate-200">{text}</span>
+    </div>
+  );
+}
+
+// ---- SCORECARD limpo com expansão para apostar ----
+function ScoreCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }) {
+  const [expanded, setExpanded] = useState(false);
+  const [draft, setDraft] = useState(pick || { outcome: '', scoreA: '', scoreB: '', bothScore: null });
+  useEffect(() => { if (pick) setDraft(pick); }, [pick]);
+
+  const finished = match.status === 'FINISHED';
+  const live = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+  const kickedOff = new Date(match.kickoff).getTime() <= Date.now();
+  const editable = !locked && !kickedOff;
+  const pts = finished ? pointsFor(pick, match) : null;
+  const hasPick = pick && (pick.outcome || pick.scoreA !== '');
+
+  function update(partial) {
+    const next = { ...draft, ...partial };
+    const a = next.scoreA !== '' && next.scoreA != null ? Number(next.scoreA) : null;
+    const b = next.scoreB !== '' && next.scoreB != null ? Number(next.scoreB) : null;
+    if (a != null && b != null) {
+      next.outcome = a > b ? 'A' : a < b ? 'B' : 'D';
+      next.bothScore = a > 0 && b > 0;
+    }
+    setDraft(next);
+    onSavePick(weekId, match.id, next);
+  }
+
+  const kickoffStr = new Date(match.kickoff).toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+  // palpites dos outros (só após kickoff)
+  const otherPicks = allPicks
+    .filter(p => p.name !== myName && p.picks?.[weekId]?.[match.id])
+    .map(p => ({ name: p.name, pick: p.picks[weekId][match.id] }));
+
+  return (
+    <div className="rounded-2xl overflow-hidden bg-slate-900 border border-slate-800">
+      {/* Card principal — clicável para expandir */}
+      <button onClick={() => setExpanded(v => !v)} className="w-full">
+        {/* estado */}
+        <div className="flex items-center justify-center pt-3 pb-1">
+          {live && <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2.5 py-0.5 rounded-full">● AO VIVO</span>}
+          {finished && <span className="text-[10px] font-bold text-slate-400 bg-slate-700/50 px-2.5 py-0.5 rounded-full">TERMINADO</span>}
+          {!finished && !live && <span className="text-[10px] font-medium text-slate-500">{kickoffStr}</span>}
+        </div>
+
+        {/* equipas */}
+        <div className="flex items-center justify-between px-4 py-3 gap-2">
+          <div className="flex-1 flex flex-col items-center gap-2">
+            <div className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center p-2">
+              {match.homeCrest && <img src={match.homeCrest} alt="" className="w-full h-full object-contain" />}
+            </div>
+            <span className="text-xs font-bold text-center leading-tight">{match.homeTeam}</span>
+          </div>
+
+          <div className="px-3 text-center min-w-[64px]">
+            {finished || live ? (
+              <div className="text-2xl font-black tabular-nums">{match.scoreHome ?? 0}<span className="text-slate-600 mx-0.5">:</span>{match.scoreAway ?? 0}</div>
+            ) : (
+              <div className="text-lg font-bold text-slate-600">VS</div>
+            )}
+          </div>
+
+          <div className="flex-1 flex flex-col items-center gap-2">
+            <div className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center p-2">
+              {match.awayCrest && <img src={match.awayCrest} alt="" className="w-full h-full object-contain" />}
+            </div>
+            <span className="text-xs font-bold text-center leading-tight">{match.awayTeam}</span>
+          </div>
+        </div>
+
+        {/* rodapé: estado do palpite + expandir */}
+        <div className="flex items-center justify-between px-4 py-2 border-t border-slate-800 bg-slate-800/30">
+          <span className="text-[11px] text-slate-400">
+            {finished && pts ? <span className="text-amber-300 font-bold">+{pts.total} pts</span>
+              : hasPick ? <span className="text-emerald-400">✓ Palpite feito</span>
+              : editable ? <span className="text-slate-500">Sem palpite</span>
+              : <span className="text-rose-400">Fechado</span>}
+          </span>
+          <span className="flex items-center gap-1 text-[11px] text-slate-400">
+            {expanded ? 'Fechar' : 'Apostar'}
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </span>
+        </div>
+      </button>
+
+      {/* Painel expandido de apostas */}
+      {expanded && (
+        <div className="px-4 py-3 border-t border-slate-800 flex flex-col gap-3 bg-slate-900">
+          {!editable && !finished && (
+            <p className="text-xs text-rose-400">{live ? 'Jogo a decorrer' : locked ? 'Semana fechada' : 'Jogo já começou'} — palpites bloqueados.</p>
+          )}
+
+          <div>
+            <p className="text-xs text-slate-400 mb-1.5">Resultado {finished && pts ? <span className={pts.outcome ? 'text-emerald-400' : 'text-rose-400'}>({pts.outcome})</span> : <span className="text-slate-600">+3 pts</span>}</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[['A', '1'], ['D', 'X'], ['B', '2']].map(([val, label]) => (
+                <button key={val} disabled={!editable} onClick={() => editable && update({ outcome: val })}
+                  className={`rounded-lg py-2 text-sm font-bold transition ${draft.outcome === val ? 'bg-amber-500 text-slate-900' : editable ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-700/50 text-slate-500'}`}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-slate-400 mb-1.5">Resultado exato {finished && pts ? <span className={pts.exact ? 'text-emerald-400' : 'text-rose-400'}>({pts.exact})</span> : <span className="text-slate-600">+5 pts</span>}</p>
+            <div className="flex items-center gap-2">
+              <input type="number" min="0" disabled={!editable} value={draft.scoreA ?? ''} onChange={e => update({ scoreA: e.target.value })}
+                className="w-14 text-center rounded-md bg-slate-700 border border-slate-600 text-stone-100 py-1.5 disabled:opacity-50" />
+              <span className="text-slate-500">-</span>
+              <input type="number" min="0" disabled={!editable} value={draft.scoreB ?? ''} onChange={e => update({ scoreB: e.target.value })}
+                className="w-14 text-center rounded-md bg-slate-700 border border-slate-600 text-stone-100 py-1.5 disabled:opacity-50" />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-slate-400 mb-1.5">Ambas marcam {finished && pts ? <span className={pts.both ? 'text-emerald-400' : 'text-rose-400'}>({pts.both})</span> : <span className="text-slate-600">+2 pts</span>}</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[[true, 'Sim'], [false, 'Não']].map(([val, label]) => (
+                <button key={label} disabled={!editable} onClick={() => editable && update({ bothScore: val })}
+                  className={`rounded-lg py-2 text-sm font-bold transition ${draft.bothScore === val ? 'bg-amber-500 text-slate-900' : editable ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-700/50 text-slate-500'}`}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* palpites da galera — só após kickoff */}
+          {kickedOff && otherPicks.length > 0 && (
+            <div className="border-t border-slate-800 pt-2 flex flex-col gap-1">
+              <p className="text-[10px] text-slate-500 uppercase mb-0.5">Palpites da galera</p>
+              {otherPicks.map(({ name, pick: p }) => {
+                const op = finished ? pointsFor(p, match) : null;
+                return (
+                  <div key={name} className="flex items-center justify-between text-xs">
+                    <span className="text-slate-300 capitalize">{name}</span>
+                    <span className="text-slate-400">
+                      {p.outcome === 'A' ? '1' : p.outcome === 'B' ? '2' : p.outcome === 'D' ? 'X' : '—'}
+                      {p.scoreA !== '' && p.scoreB !== '' ? ` (${p.scoreA}-${p.scoreB})` : ''}
+                      {op ? ` · +${op.total}` : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {!kickedOff && otherPicks.length > 0 && (
+            <p className="text-[11px] text-slate-600 border-t border-slate-800 pt-2">🔒 {otherPicks.length} palpite(s) — revelados quando o jogo começar</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ---- Lista de torneios ----
-function TournamentList({ tournaments, weeks, onOpen }) {
-  const active = tournaments.filter(t => t.status === 'active');
-  const finished = tournaments.filter(t => t.status === 'finished');
-
+function TournamentList({ tournaments, weeks, onOpen, emptyMsg }) {
   const LEAGUE_STYLE = {
     liga_principal: {
       emblem: 'https://crests.football-data.org/PL.png',
@@ -312,7 +618,6 @@ function TournamentList({ tournaments, weeks, onOpen }) {
       emblem: '', gradient: 'from-slate-700/40 to-slate-900', accent: 'text-amber-300',
     };
     const typeLabel = t.type === 'league' ? 'Liga' : t.type === 'champions' ? 'Champions' : 'Mini-torneio';
-    // conta jogos desta semana
     const tWeeks = Object.values(weeks).filter(w => w.tournamentId === t.id);
     const now = Date.now();
     const activeWeek = tWeeks.find(w => new Date(w.dateTo).getTime() > now - 24 * 3600 * 1000);
@@ -344,16 +649,8 @@ function TournamentList({ tournaments, weeks, onOpen }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Torneios activos</p>
-      {active.length === 0 && <p className="text-sm text-slate-500">Ainda não há torneios activos.</p>}
-      {active.map(t => <TournamentCard key={t.id} t={t} />)}
-
-      {finished.length > 0 && (
-        <>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mt-4">Terminados</p>
-          {finished.map(t => <TournamentCard key={t.id} t={t} />)}
-        </>
-      )}
+      {tournaments.length === 0 && <p className="text-sm text-slate-500 text-center py-8">{emptyMsg || 'Nenhum torneio.'}</p>}
+      {tournaments.map(t => <TournamentCard key={t.id} t={t} />)}
     </div>
   );
 }
@@ -446,7 +743,7 @@ function WeekView({ week, myName, myPicks, allPicks, onSavePick }) {
       )}
 
       {normalMatches.map(m => (
-        <LeagueMatchCard
+        <ScoreCard
           key={m.id}
           match={m}
           weekId={week.id}
@@ -560,165 +857,7 @@ function HighlightCard({ match, weekId, pick, locked, myName, allPicks, onSavePi
   );
 }
 
-// ---- Card de um jogo ----
-function LeagueMatchCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }) {
-  const [draft, setDraft] = useState(pick || { outcome: '', scoreA: '', scoreB: '', bothScore: null });
-  const [othersOpen, setOthersOpen] = useState(false);
-
-  useEffect(() => { if (pick) setDraft(pick); }, [pick]);
-
-  const finished = match.status === 'FINISHED';
-  const live = match.status === 'IN_PLAY' || match.status === 'PAUSED';
-  const kickedOff = new Date(match.kickoff).getTime() <= Date.now();
-  const editable = !locked && !kickedOff;
-  const pts = finished ? pointsFor(pick, match) : null;
-
-  function update(partial) {
-    const next = { ...draft, ...partial };
-    // inferir VED do exato
-    const a = next.scoreA !== '' && next.scoreA != null ? Number(next.scoreA) : null;
-    const b = next.scoreB !== '' && next.scoreB != null ? Number(next.scoreB) : null;
-    if (a != null && b != null) {
-      next.outcome = a > b ? 'A' : a < b ? 'B' : 'D';
-      next.bothScore = a > 0 && b > 0;
-    }
-    setDraft(next);
-    onSavePick(weekId, match.id, next);
-  }
-
-  const kickoffStr = new Date(match.kickoff).toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-
-  // palpites dos outros (só depois do kickoff)
-  const otherPicks = allPicks
-    .filter(p => p.name !== myName && p.picks?.[weekId]?.[match.id])
-    .map(p => ({ name: p.name, pick: p.picks[weekId][match.id] }));
-
-  return (
-    <div className="rounded-xl border border-slate-700 bg-slate-800/60 overflow-hidden">
-      {/* Cabeçalho */}
-      <div className="px-4 py-2 flex items-center justify-between border-b border-slate-700/50">
-        <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-slate-500">
-          {match.leagueEmblem && <img src={match.leagueEmblem} alt="" className="w-4 h-4 object-contain" />}
-          {match.leagueName}{match.isClassic ? ' ⭐' : ''}
-        </span>
-        <span className="text-[10px] text-slate-500">{kickoffStr}</span>
-      </div>
-
-      {/* Equipas e placar — com escudos */}
-      <div className="px-4 py-4 flex items-center justify-between gap-2">
-        <div className="flex-1 flex flex-col items-center gap-2 text-center">
-          {match.homeCrest && <img src={match.homeCrest} alt="" className="w-12 h-12 object-contain" />}
-          <span className="font-bold text-xs leading-tight">{match.homeTeam}</span>
-        </div>
-        <div className="px-2 text-center min-w-[70px]">
-          {finished || live ? (
-            <div className="text-2xl font-bold tabular-nums">{match.scoreHome ?? 0}<span className="text-slate-600 mx-1">:</span>{match.scoreAway ?? 0}</div>
-          ) : (
-            <div className="text-sm font-bold text-slate-500">VS</div>
-          )}
-          {live && <span className="block text-[10px] text-rose-400 font-bold mt-0.5">🔴 AO VIVO</span>}
-          {finished && <span className="block text-[10px] text-slate-500 mt-0.5">Final</span>}
-        </div>
-        <div className="flex-1 flex flex-col items-center gap-2 text-center">
-          {match.awayCrest && <img src={match.awayCrest} alt="" className="w-12 h-12 object-contain" />}
-          <span className="font-bold text-xs leading-tight">{match.awayTeam}</span>
-        </div>
-      </div>
-
-      {/* Apostas */}
-      <div className="px-4 py-3 border-t border-dashed border-slate-600 flex flex-col gap-3">
-        {!editable && !finished && (
-          <p className="text-xs text-rose-400">{live ? 'Jogo a decorrer' : locked ? 'Semana fechada' : 'Jogo já começou'} — palpites bloqueados.</p>
-        )}
-
-        {/* 1X2 */}
-        <div>
-          <p className="text-xs text-slate-400 mb-1.5">Resultado {finished && pts ? <span className={pts.outcome ? 'text-emerald-400' : 'text-rose-400'}>({pts.outcome ? '+3' : '0'})</span> : <span className="text-slate-600">+3 pts</span>}</p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {[['A', '1'], ['D', 'X'], ['B', '2']].map(([val, label]) => (
-              <button
-                key={val}
-                disabled={!editable}
-                onClick={() => editable && update({ outcome: val })}
-                className={`rounded-lg py-2 text-sm font-bold transition ${
-                  draft.outcome === val ? 'bg-amber-500 text-slate-900' : editable ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-700/50 text-slate-500'
-                }`}
-              >{label}</button>
-            ))}
-          </div>
-        </div>
-
-        {/* Resultado exato */}
-        <div>
-          <p className="text-xs text-slate-400 mb-1.5">Resultado exato {finished && pts ? <span className={pts.exact ? 'text-emerald-400' : 'text-rose-400'}>({pts.exact ? '+5' : '0'})</span> : <span className="text-slate-600">+5 pts</span>}</p>
-          <div className="flex items-center gap-2">
-            <input type="number" min="0" disabled={!editable} value={draft.scoreA ?? ''} onChange={e => update({ scoreA: e.target.value })}
-              className="w-14 text-center rounded-md bg-slate-700 border border-slate-600 text-stone-100 py-1.5 disabled:opacity-50" />
-            <span className="text-slate-500">-</span>
-            <input type="number" min="0" disabled={!editable} value={draft.scoreB ?? ''} onChange={e => update({ scoreB: e.target.value })}
-              className="w-14 text-center rounded-md bg-slate-700 border border-slate-600 text-stone-100 py-1.5 disabled:opacity-50" />
-          </div>
-        </div>
-
-        {/* Ambas marcam */}
-        <div>
-          <p className="text-xs text-slate-400 mb-1.5">Ambas marcam {finished && pts ? <span className={pts.both ? 'text-emerald-400' : 'text-rose-400'}>({pts.both ? '+2' : '0'})</span> : <span className="text-slate-600">+2 pts</span>}</p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {[[true, 'Sim'], [false, 'Não']].map(([val, label]) => (
-              <button
-                key={label}
-                disabled={!editable}
-                onClick={() => editable && update({ bothScore: val })}
-                className={`rounded-lg py-2 text-sm font-bold transition ${
-                  draft.bothScore === val ? 'bg-amber-500 text-slate-900' : editable ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-700/50 text-slate-500'
-                }`}
-              >{label}</button>
-            ))}
-          </div>
-        </div>
-
-        {finished && pts && (
-          <p className="text-xs text-center font-bold text-amber-300">Total: +{pts.total} pts</p>
-        )}
-      </div>
-
-      {/* Palpites da galera */}
-      {kickedOff && otherPicks.length > 0 && (
-        <div className="border-t border-slate-700">
-          <button onClick={() => setOthersOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-2 text-xs font-bold text-slate-400">
-            Palpites da galera ({otherPicks.length})
-            {othersOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-          {othersOpen && (
-            <div className="px-4 pb-3 flex flex-col gap-1">
-              {otherPicks.map(({ name, pick: p }) => {
-                const op = finished ? pointsFor(p, match) : null;
-                return (
-                  <div key={name} className="flex items-center justify-between text-xs">
-                    <span className={name === myName ? 'text-amber-300 font-bold' : 'text-slate-300'}>{name}</span>
-                    <span className="text-slate-400">
-                      {p.outcome === 'A' ? '1' : p.outcome === 'B' ? '2' : p.outcome === 'D' ? 'X' : '—'}
-                      {p.scoreA !== '' && p.scoreB !== '' ? ` (${p.scoreA}-${p.scoreB})` : ''}
-                      {p.bothScore != null ? ` · AM:${p.bothScore ? 'S' : 'N'}` : ''}
-                      {op ? ` · +${op.total}` : ''}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-      {!kickedOff && otherPicks.length > 0 && (
-        <p className="px-4 py-2 text-[11px] text-slate-600 border-t border-slate-700">
-          🔒 {otherPicks.length} palpite(s) — revelados quando o jogo começar
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ---- Histórico: semanas anteriores jogo a jogo ----
+// ---- Histórico de semanas do torneio ----
 function HistoryView({ weeks, myName, myPicks, allPicks }) {
   const [openWeek, setOpenWeek] = useState(null);
   const finishedWeeks = weeks.filter(w => new Date(w.dateTo).getTime() < Date.now()).reverse();
