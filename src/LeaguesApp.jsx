@@ -70,7 +70,8 @@ export default function LeaguesApp({ onBackToArchive }) {
   const [nameInput, setNameInput] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const [view, setView] = useState('tournaments'); // tournaments | tournament
+  const [view, setView] = useState('tournaments'); // tournaments | tournament | profile
+  const [profilePlayer, setProfilePlayer] = useState(null);
   const [activeTournament, setActiveTournament] = useState(null);
   const [innerTab, setInnerTab] = useState('current'); // current | history | standings
 
@@ -209,13 +210,33 @@ export default function LeaguesApp({ onBackToArchive }) {
             <Trophy className="text-amber-400" size={22} />
             <h1 className="font-bold text-lg">PTZ Bet</h1>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span>{myName}</span>
+          <div className="flex items-center gap-3 text-xs text-slate-400">
+            <button
+              onClick={() => { setProfilePlayer(myName); setView('profile'); }}
+              className="flex items-center gap-1 hover:text-amber-300 transition"
+            >
+              <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-900 font-bold flex items-center justify-center text-xs capitalize">
+                {myName.charAt(0)}
+              </span>
+              <span className="capitalize">{myName}</span>
+            </button>
             {onBackToArchive && (
-              <button onClick={onBackToArchive} className="underline hover:text-amber-300">Mundial 2026</button>
+              <button onClick={onBackToArchive} className="underline hover:text-amber-300">Mundial</button>
             )}
           </div>
         </div>
+
+        {view === 'profile' && profilePlayer && (
+          <ProfileView
+            player={profilePlayer}
+            myName={myName}
+            tournaments={tournaments}
+            weeks={weeks}
+            allPicks={allPicks}
+            onBack={() => setView('tournaments')}
+            onOpenPlayer={(p) => setProfilePlayer(p)}
+          />
+        )}
 
         {view === 'tournaments' && (
           <TournamentList
@@ -613,6 +634,142 @@ function StandingsView({ weeks, allPicks, myName }) {
         );
       })}
       {rows.length === 0 && <p className="text-sm text-slate-500 text-center py-8">Sem dados ainda.</p>}
+    </div>
+  );
+}
+
+// ---- Página de perfil do jogador ----
+function ProfileView({ player, myName, tournaments, weeks, allPicks, onBack, onOpenPlayer }) {
+  const playerData = allPicks.find(p => p.name === player);
+
+  // Estatísticas globais e por torneio
+  const stats = useMemo(() => {
+    const perTournament = [];
+    let globalTotal = 0, globalExact = 0, globalOutcome = 0, globalBoth = 0, globalGames = 0, globalHits = 0;
+
+    for (const t of tournaments) {
+      const tWeeks = Object.values(weeks).filter(w => w.tournamentId === t.id);
+      let tTotal = 0, tExact = 0, tOutcome = 0, tBoth = 0, tGames = 0, tHits = 0;
+      for (const week of tWeeks) {
+        if (new Date(week.dateTo).getTime() > Date.now()) continue; // só terminadas
+        for (const m of week.matches) {
+          if (m.status !== 'FINISHED') continue;
+          const pick = playerData?.picks?.[week.id]?.[m.id];
+          if (pick) tGames++;
+          const pts = pointsFor(pick, m);
+          tTotal += pts.total;
+          if (pts.exact) { tExact++; tHits++; }
+          if (pts.outcome) { tOutcome++; tHits++; }
+          if (pts.both) { tBoth++; tHits++; }
+        }
+      }
+      if (tGames > 0 || tTotal > 0) {
+        perTournament.push({ name: t.name, type: t.type, total: tTotal, exact: tExact, outcome: tOutcome, both: tBoth, games: tGames });
+      }
+      globalTotal += tTotal; globalExact += tExact; globalOutcome += tOutcome;
+      globalBoth += tBoth; globalGames += tGames;
+    }
+    return { perTournament, globalTotal, globalExact, globalOutcome, globalBoth, globalGames };
+  }, [player, playerData, tournaments, weeks]);
+
+  // Ranking global entre todos os jogadores
+  const globalRanking = useMemo(() => {
+    return allPicks.map(p => {
+      let total = 0;
+      for (const t of tournaments) {
+        const tWeeks = Object.values(weeks).filter(w => w.tournamentId === t.id);
+        for (const week of tWeeks) {
+          if (new Date(week.dateTo).getTime() > Date.now()) continue;
+          for (const m of week.matches) {
+            total += pointsFor(p.picks?.[week.id]?.[m.id], m).total;
+          }
+        }
+      }
+      return { name: p.name, total };
+    }).sort((a, b) => b.total - a.total);
+  }, [allPicks, tournaments, weeks]);
+
+  const myRank = globalRanking.findIndex(r => r.name === player) + 1;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-400 hover:text-amber-300 w-fit">
+        <ArrowLeft size={16} /> Voltar
+      </button>
+
+      {/* Cartão do perfil */}
+      <div className="rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 p-6 flex items-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-amber-500 text-slate-900 font-bold flex items-center justify-center text-2xl capitalize">
+          {player.charAt(0)}
+        </div>
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold capitalize">{player}</h2>
+          <p className="text-sm text-slate-400">
+            {myRank > 0 && <>#{myRank} global · </>}{stats.globalTotal} pts totais
+          </p>
+        </div>
+      </div>
+
+      {/* Estatísticas globais */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl bg-slate-800/60 border border-slate-700 p-3 text-center">
+          <p className="text-2xl font-bold text-amber-300">{stats.globalExact}</p>
+          <p className="text-[10px] text-slate-400 uppercase mt-0.5">Exatos</p>
+        </div>
+        <div className="rounded-xl bg-slate-800/60 border border-slate-700 p-3 text-center">
+          <p className="text-2xl font-bold text-emerald-400">{stats.globalOutcome}</p>
+          <p className="text-[10px] text-slate-400 uppercase mt-0.5">V/E/D</p>
+        </div>
+        <div className="rounded-xl bg-slate-800/60 border border-slate-700 p-3 text-center">
+          <p className="text-2xl font-bold text-sky-400">{stats.globalBoth}</p>
+          <p className="text-[10px] text-slate-400 uppercase mt-0.5">Ambas M.</p>
+        </div>
+      </div>
+
+      {/* Pontos por torneio */}
+      <div>
+        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Histórico por torneio</p>
+        <div className="flex flex-col gap-2">
+          {stats.perTournament.length === 0 && (
+            <p className="text-sm text-slate-500">Ainda não há torneios com pontos.</p>
+          )}
+          {stats.perTournament.map(t => {
+            const icon = t.type === 'league' ? '⚽' : t.type === 'champions' ? '🏆' : '🎯';
+            return (
+              <div key={t.name} className="rounded-xl border border-slate-700 bg-slate-800/40 p-3 flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-sm">{icon} {t.name}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{t.exact} exatos · {t.outcome} V/E/D · {t.both} AM · {t.games} jogos</p>
+                </div>
+                <span className="px-3 py-1 rounded-lg bg-slate-700 font-bold tabular-nums">{t.total}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Ranking global */}
+      <div>
+        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Classificação global</p>
+        <div className="flex flex-col gap-1.5">
+          {globalRanking.map((r, i) => {
+            const medal = ['🥇', '🥈', '🥉'][i] || `${i + 1}`;
+            return (
+              <button
+                key={r.name}
+                onClick={() => onOpenPlayer(r.name)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 border transition ${
+                  r.name === player ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-700 bg-slate-800/40 hover:border-slate-600'
+                }`}
+              >
+                <span className="w-5 text-center text-sm">{medal}</span>
+                <span className="flex-1 text-left text-sm font-bold capitalize">{r.name}</span>
+                <span className="text-sm font-bold tabular-nums text-slate-300">{r.total}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
