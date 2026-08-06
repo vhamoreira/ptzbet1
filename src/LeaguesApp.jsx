@@ -210,6 +210,29 @@ export default function LeaguesApp({ onBackToArchive }) {
     } catch (e) { showToast('Erro ao guardar'); }
   }
 
+  // Admin: gravar resultado de um jogo (scoreHome, scoreAway, status)
+  async function saveResult(weekId, matchId, result) {
+    const week = weeks[weekId];
+    if (!week) return;
+    const nextMatches = week.matches.map(m => {
+      if (m.id !== matchId) return m;
+      const sH = result.scoreHome != null && result.scoreHome !== '' ? Number(result.scoreHome) : null;
+      const sA = result.scoreAway != null && result.scoreAway !== '' ? Number(result.scoreAway) : null;
+      return {
+        ...m,
+        scoreHome: sH, scoreAway: sA,
+        status: result.status || m.status,
+        bothScored: sH != null && sA != null ? (sH > 0 && sA > 0) : null,
+      };
+    });
+    const nextWeek = { ...week, matches: nextMatches };
+    setWeeks(prev => ({ ...prev, [weekId]: nextWeek }));
+    try {
+      await storage.set(`week_${weekId}`, JSON.stringify(nextWeek), true);
+      showToast('Resultado guardado');
+    } catch (e) { showToast('Erro ao guardar resultado'); }
+  }
+
   if (stage === 'loading') {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">A carregar...</div>;
   }
@@ -267,6 +290,8 @@ export default function LeaguesApp({ onBackToArchive }) {
             myPicks={myPicks}
             allPicks={allPicks}
             onSavePick={savePick}
+            isAdmin={isAdmin}
+            onSaveResult={saveResult}
           />
         )}
 
@@ -306,20 +331,32 @@ export default function LeaguesApp({ onBackToArchive }) {
               weeks={weeks}
               onOpen={(t) => { setActiveTournament(t); setView('tournament'); setInnerTab('standings'); }}
               emptyMsg="Ainda não há torneios terminados."
+              greyed
             />
             {onBackToArchive && (
               <button
                 onClick={onBackToArchive}
-                className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-800/40 p-4 flex items-center justify-between hover:border-amber-500/50 transition"
+                className="mt-3 w-full rounded-2xl overflow-hidden border border-slate-700 relative min-h-[130px] flex flex-col justify-between hover:border-amber-500/50 transition group"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">🏆</span>
-                  <div className="text-left">
-                    <p className="font-bold text-sm">Mundial 2026</p>
-                    <p className="text-xs text-slate-400">Ver classificação e histórico</p>
-                  </div>
+                {/* Fundo cinematográfico dourado */}
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(150deg, #78591c 0%, #3a2a0d 55%, #0f172a 100%)' }} />
+                <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 75% 40%, rgba(245,200,80,0.35), transparent 55%)' }} />
+                {/* Troféu grande ao fundo */}
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[90px] opacity-25 grayscale group-hover:grayscale-0 group-hover:opacity-40 transition">🏆</div>
+                {/* grão/escurecimento (grey out) */}
+                <div className="absolute inset-0 bg-slate-950/40" />
+
+                <div className="relative p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-200/80">Arquivo · Terminado</p>
+                  <p className="font-black text-2xl text-white/90 mt-1 drop-shadow">Mundial 2026</p>
                 </div>
-                <ChevronDown className="-rotate-90 text-slate-500" size={18} />
+                <div className="relative p-5 pt-0 flex items-end justify-between">
+                  <p className="text-xs text-slate-300/80">Campeão: Sérgio · 366 pts</p>
+                  <span className="flex items-center gap-1 text-xs font-bold text-white bg-white/10 backdrop-blur px-3 py-1.5 rounded-full group-hover:bg-amber-500 group-hover:text-slate-900 transition">
+                    Ver
+                    <ChevronDown className="-rotate-90" size={14} />
+                  </span>
+                </div>
               </button>
             )}
           </>
@@ -335,6 +372,9 @@ export default function LeaguesApp({ onBackToArchive }) {
             allPicks={allPicks}
             onOpenPlayer={(p) => setProfilePlayer(p)}
             onBackToArchive={onBackToArchive}
+            isAdmin={isAdmin}
+            onToggleAdmin={(on) => setIsAdmin(on)}
+            showToast={showToast}
           />
         )}
       </div>
@@ -395,7 +435,7 @@ function SettingsIcon() {
 }
 
 // ---- HOMEPAGE: selector de dias + jogos agrupados por torneio ----
-function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick }) {
+function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick, isAdmin, onSaveResult }) {
   const now = Date.now();
   const [selectedDay, setSelectedDay] = useState('all'); // 'all' = todos, ou 'YYYY-MM-DD'
 
@@ -567,6 +607,8 @@ function HomePage({ tournaments, weeks, myName, myPicks, allPicks, onSavePick })
                   myName={myName}
                   allPicks={allPicks}
                   onSavePick={onSavePick}
+                  isAdmin={isAdmin}
+                  onSaveResult={onSaveResult}
                 />
               ))}
             </div>
@@ -592,10 +634,12 @@ function SectionLabel({ icon, emblem, text }) {
 }
 
 // ---- SCORECARD limpo com expansão para apostar ----
-function ScoreCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }) {
+function ScoreCard({ match, weekId, pick, locked, myName, allPicks, onSavePick, isAdmin, onSaveResult }) {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState(pick || { outcome: '', scoreA: '', scoreB: '', bothScore: null });
+  const [resDraft, setResDraft] = useState({ scoreHome: match.scoreHome ?? '', scoreAway: match.scoreAway ?? '' });
   useEffect(() => { if (pick) setDraft(pick); }, [pick]);
+  useEffect(() => { setResDraft({ scoreHome: match.scoreHome ?? '', scoreAway: match.scoreAway ?? '' }); }, [match.scoreHome, match.scoreAway]);
 
   const finished = match.status === 'FINISHED';
   const live = match.status === 'IN_PLAY' || match.status === 'PAUSED';
@@ -734,6 +778,30 @@ function ScoreCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }
           {!kickedOff && otherPicks.length > 0 && (
             <p className="text-[11px] text-slate-600 border-t border-slate-800 pt-2">🔒 {otherPicks.length} palpite(s) — revelados quando o jogo começar</p>
           )}
+
+          {/* Painel de ADMIN: editar resultado */}
+          {isAdmin && (
+            <div className="border-t border-amber-500/30 pt-3 mt-1">
+              <p className="text-[10px] text-amber-400 uppercase font-bold mb-2">🔧 Admin — resultado real</p>
+              <div className="flex items-center gap-2 mb-2">
+                <input type="number" min="0" value={resDraft.scoreHome} onChange={e => setResDraft(r => ({ ...r, scoreHome: e.target.value }))}
+                  className="w-14 text-center rounded-md bg-slate-700 border border-slate-600 text-stone-100 py-1.5" placeholder="—" />
+                <span className="text-slate-500">-</span>
+                <input type="number" min="0" value={resDraft.scoreAway} onChange={e => setResDraft(r => ({ ...r, scoreAway: e.target.value }))}
+                  className="w-14 text-center rounded-md bg-slate-700 border border-slate-600 text-stone-100 py-1.5" placeholder="—" />
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => onSaveResult(weekId, match.id, { scoreHome: resDraft.scoreHome, scoreAway: resDraft.scoreAway, status: 'IN_PLAY' })}
+                  className="flex-1 text-xs font-bold py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                >Ao vivo</button>
+                <button
+                  onClick={() => onSaveResult(weekId, match.id, { scoreHome: resDraft.scoreHome, scoreAway: resDraft.scoreAway, status: 'FINISHED' })}
+                  className="flex-1 text-xs font-bold py-1.5 rounded-lg bg-amber-500 text-slate-900"
+                >Terminado</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -741,7 +809,7 @@ function ScoreCard({ match, weekId, pick, locked, myName, allPicks, onSavePick }
 }
 
 // ---- Lista de torneios ----
-function TournamentList({ tournaments, weeks, onOpen, emptyMsg, myPicks }) {
+function TournamentList({ tournaments, weeks, onOpen, emptyMsg, myPicks, greyed }) {
   const STYLE = {
     liga_principal: {
       card: 'bg-gradient-to-br from-purple-600/50 via-indigo-800/40 to-slate-950',
@@ -777,7 +845,7 @@ function TournamentList({ tournaments, weeks, onOpen, emptyMsg, myPicks }) {
     return (
       <button
         onClick={() => onOpen(t)}
-        className={`w-full text-left rounded-2xl overflow-hidden border border-slate-700 ${style.card} hover:border-amber-500/50 transition group relative min-h-[150px] flex flex-col justify-between`}
+        className={`w-full text-left rounded-2xl overflow-hidden border border-slate-700 ${style.card} hover:border-amber-500/50 transition group relative min-h-[150px] flex flex-col justify-between ${greyed ? 'saturate-50 opacity-80 hover:opacity-100 hover:saturate-100' : ''}`}
       >
         {/* Emblemas de fundo */}
         {style.leagueEmblems && (
@@ -1301,8 +1369,10 @@ function StandingsView({ weeks, allPicks, myName }) {
 }
 
 // ---- Página de perfil do jogador ----
-function ProfileView({ player, myName, tournaments, weeks, allPicks, onOpenPlayer, onBackToArchive }) {
+function ProfileView({ player, myName, tournaments, weeks, allPicks, onOpenPlayer, onBackToArchive, isAdmin, onToggleAdmin, showToast }) {
   const playerData = allPicks.find(p => p.name === player);
+  const [pinInput, setPinInput] = useState('');
+  const [showPin, setShowPin] = useState(false);
 
   // Estatísticas globais e por torneio
   const stats = useMemo(() => {
@@ -1353,6 +1423,30 @@ function ProfileView({ player, myName, tournaments, weeks, allPicks, onOpenPlaye
 
   const myRank = globalRanking.findIndex(r => r.name === player) + 1;
 
+  // Torneios ganhos e melhor classificação (só torneios terminados)
+  const achievements = useMemo(() => {
+    let won = 0;
+    let bestRank = null;
+    for (const t of tournaments) {
+      if (t.status !== 'finished') continue;
+      const tWeeks = Object.values(weeks).filter(w => w.tournamentId === t.id);
+      // classificação final do torneio
+      const ranking = allPicks.map(p => {
+        let total = 0;
+        for (const week of tWeeks) {
+          for (const m of week.matches) {
+            total += pointsFor(p.picks?.[week.id]?.[m.id], m).total;
+          }
+        }
+        return { name: p.name, total };
+      }).sort((a, b) => b.total - a.total);
+      const pos = ranking.findIndex(r => r.name === player) + 1;
+      if (pos === 1) won++;
+      if (pos > 0 && (bestRank === null || pos < bestRank)) bestRank = pos;
+    }
+    return { won, bestRank };
+  }, [tournaments, weeks, allPicks, player]);
+
   return (
     <div className="flex flex-col gap-4">
       {/* Cartão do perfil */}
@@ -1365,6 +1459,26 @@ function ProfileView({ player, myName, tournaments, weeks, allPicks, onOpenPlaye
           <p className="text-sm text-slate-400">
             {myRank > 0 && <>#{myRank} global · </>}{stats.globalTotal} pts totais
           </p>
+        </div>
+      </div>
+
+      {/* Conquistas: ligas ganhas + melhor classificação */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-gradient-to-br from-amber-500/15 to-slate-800/40 border border-amber-500/30 p-4 flex items-center gap-3">
+          <span className="text-3xl">🏆</span>
+          <div>
+            <p className="text-2xl font-black text-amber-300 leading-none">{achievements.won}</p>
+            <p className="text-[10px] text-slate-400 uppercase mt-1">Torneios ganhos</p>
+          </div>
+        </div>
+        <div className="rounded-xl bg-gradient-to-br from-sky-500/15 to-slate-800/40 border border-sky-500/30 p-4 flex items-center gap-3">
+          <span className="text-3xl">📊</span>
+          <div>
+            <p className="text-2xl font-black text-sky-300 leading-none">
+              {achievements.bestRank ? `${achievements.bestRank}º` : '—'}
+            </p>
+            <p className="text-[10px] text-slate-400 uppercase mt-1">Melhor posição</p>
+          </div>
         </div>
       </div>
 
@@ -1405,6 +1519,60 @@ function ProfileView({ player, myName, tournaments, weeks, allPicks, onOpenPlaye
           })}
         </div>
       </div>
+
+      {/* Modo Admin (só no próprio perfil) */}
+      {player === myName && (
+        <div>
+          <p className="text-xs font-bold text-slate-400 uppercase mb-2">Administração</p>
+          {isAdmin ? (
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🔓</span>
+                <div>
+                  <p className="font-bold text-sm text-emerald-400">Modo admin activo</p>
+                  <p className="text-xs text-slate-400">Podes editar resultados dos jogos</p>
+                </div>
+              </div>
+              <button onClick={() => onToggleAdmin(false)} className="text-xs font-bold text-rose-400 border border-rose-500/40 px-3 py-1.5 rounded-lg">Sair</button>
+            </div>
+          ) : showPin ? (
+            <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4 flex flex-col gap-2">
+              <input
+                type="password"
+                inputMode="numeric"
+                value={pinInput}
+                onChange={e => setPinInput(e.target.value)}
+                placeholder="PIN de admin"
+                className="rounded-lg bg-slate-700 border border-slate-600 text-stone-100 px-3 py-2 text-sm"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (pinInput === ADMIN_PIN) { onToggleAdmin(true); setShowPin(false); setPinInput(''); showToast && showToast('Modo admin activado'); }
+                    else { showToast && showToast('PIN incorreto'); }
+                  }}
+                  className="flex-1 bg-amber-500 text-slate-900 font-bold py-2 rounded-lg text-sm"
+                >Entrar</button>
+                <button onClick={() => { setShowPin(false); setPinInput(''); }} className="px-4 text-slate-400 text-sm">Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowPin(true)}
+              className="w-full rounded-xl border border-slate-700 bg-slate-800/40 p-4 flex items-center justify-between hover:border-amber-500/50 transition"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🔒</span>
+                <div className="text-left">
+                  <p className="font-bold text-sm">Entrar como admin</p>
+                  <p className="text-xs text-slate-400">Editar resultados e gerir torneios</p>
+                </div>
+              </div>
+              <ChevronDown className="-rotate-90 text-slate-500" size={18} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Arquivo do Mundial (só no próprio perfil) */}
       {player === myName && onBackToArchive && (
